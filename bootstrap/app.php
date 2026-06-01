@@ -9,13 +9,10 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
         then: function () {
-            // Load iclock routes without the web middleware group.
-            // Device endpoints don't need sessions, cookies, or CSRF.
-            // LogBiometricRequest middleware is applied per-route inside iclock.php.
-            \Illuminate\Support\Facades\Route::group(
-                [],
-                realpath(__DIR__.'/../../biometric-attendance/routes/iclock.php')
-            );
+            $iclockRoutes = realpath(__DIR__.'/../../biometric-attendance/routes/iclock.php');
+            if ($iclockRoutes) {
+                \Illuminate\Support\Facades\Route::group([], $iclockRoutes);
+            }
         },
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
