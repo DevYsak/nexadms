@@ -297,7 +297,7 @@
         </div>
 
         {{-- Employee Detail Panel --}}
-        <div class="card" id="detail-panel" style="width:360px;flex-shrink:0;display:flex;flex-direction:column;max-height:calc(100vh - 200px);overflow:hidden;">
+        <div class="card" id="detail-panel" style="width:400px;flex-shrink:0;display:flex;flex-direction:column;max-height:calc(100vh - 200px);overflow:hidden;">
           <div style="padding:14px 16px;border-bottom:1px solid #F1F5F9;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
             <span style="font-size:13px;font-weight:700;color:#0F172A;">Employee Detail</span>
             <select id="timeline-emp-select" onchange="loadTimeline(this.value)" class="tb-input" style="font-size:12px;height:30px;max-width:180px;">
@@ -460,132 +460,148 @@ async function loadTimeline(code) {
 function renderTimeline(data, el) {
   const emp      = data.employee;
   const sessions = data.sessions ?? [];
-  const events   = data.events   ?? [];
   const sum      = data.summary;
+  const dupCount = sum?.dup_count ?? 0;
 
+  // ── Status config ──────────────────────────────────────────
+  const STATUS = {
+    checked_out:   { color:'#059669', bg:'#ECFDF5', border:'#BBF7D0', label:'Checked Out',  dot:'#059669' },
+    in_office:     { color:'#2563EB', bg:'#EFF6FF', border:'#BFDBFE', label:'In Office',    dot:'#2563EB' },
+    no_attendance: { color:'#94A3B8', bg:'#F8FAFC', border:'#E5E7EB', label:'No Attendance',dot:'#94A3B8' },
+  };
+  const sc = STATUS[sum?.status] ?? STATUS.no_attendance;
+
+  // ── Employee header ────────────────────────────────────────
   const empHeader = `
-    <div style="display:flex;align-items:center;gap:12px;padding-bottom:14px;border-bottom:1px solid #F1F5F9;margin-bottom:14px;">
-      <div class="avatar" style="width:42px;height:42px;font-size:14px;flex-shrink:0;background:${emp?.color??'#6366f1'}">${emp?.initials??'?'}</div>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+      <div class="avatar" style="width:44px;height:44px;font-size:15px;flex-shrink:0;background:${emp?.color??'#6366f1'}">${emp?.initials??'?'}</div>
       <div style="flex:1;min-width:0;">
-        <div style="font-size:14px;font-weight:700;color:#0F172A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${emp?.name??'Employee'}</div>
-        <div style="font-size:12px;color:#64748B;">${emp?.department??'—'}</div>
+        <div style="font-size:15px;font-weight:700;color:#0F172A;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${emp?.name??'Employee'}</div>
+        <div style="font-size:12px;color:#64748B;margin-top:1px;">${emp?.department??'—'}</div>
       </div>
+      <span style="display:inline-flex;align-items:center;gap:5px;background:${sc.bg};border:1px solid ${sc.border};color:${sc.color};font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:99px;white-space:nowrap;">
+        <span style="width:6px;height:6px;border-radius:50%;background:${sc.dot};display:inline-block;${sum?.status==='in_office'?'animation:pulse 2s infinite;':''}"></span>
+        ${sc.label}
+      </span>
     </div>`;
 
-  if (!events.length && !sessions.length) {
-    el.innerHTML = empHeader + `<div style="text-align:center;padding:32px 0;color:#94A3B8;font-size:13px;">No attendance recorded for this date.</div>`;
+  if (!sessions.length) {
+    el.innerHTML = empHeader + `<div style="text-align:center;padding:40px 0;color:#94A3B8;font-size:13px;">No attendance recorded for this date.</div>`;
     return;
   }
 
-  // Status
-  const statusCfg = {
-    checked_out:   { bg:'#ECFDF5', color:'#059669', dot:'dot-green',  label:'Checked Out'   },
-    in_office:     { bg:'#EFF6FF', color:'#2563EB', dot:'dot-blue',   label:'In Office'     },
-    no_attendance: { bg:'#F8FAFC', color:'#94A3B8', dot:'dot-gray',   label:'No Attendance' },
-    absent:        { bg:'#FEF2F2', color:'#DC2626', dot:'dot-red',    label:'Absent'        },
-  };
-  const sc = statusCfg[sum?.status] ?? statusCfg.no_attendance;
-
-  // Check-in / Check-out prominent display
+  // ── Big stat cards ─────────────────────────────────────────
   const hasOut = !!sum?.last_out;
-  const bigCards = `
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
-      <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:10px;padding:12px;">
-        <div style="font-size:10.5px;font-weight:700;color:#059669;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">↑ First Check-In</div>
-        <div style="font-size:18px;font-weight:800;color:#0F172A;line-height:1;">${sum?.first_in??'—'}</div>
+  const statCards = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+      <div style="background:#F0FDF4;border:1.5px solid #86EFAC;border-radius:12px;padding:14px 16px;">
+        <div style="font-size:10px;font-weight:700;color:#059669;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px;">↑ FIRST IN</div>
+        <div style="font-size:22px;font-weight:800;color:#0F172A;line-height:1;letter-spacing:-.5px;">${sum?.first_in??'—'}</div>
       </div>
-      <div style="background:${hasOut?'#FFF1F2':'#F8FAFC'};border:1px solid ${hasOut?'#FECDD3':'#E5E7EB'};border-radius:10px;padding:12px;">
-        <div style="font-size:10.5px;font-weight:700;color:${hasOut?'#DC2626':'#94A3B8'};text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">↓ Last Check-Out</div>
-        <div style="font-size:18px;font-weight:800;color:${hasOut?'#0F172A':'#CBD5E1'};line-height:1;">${sum?.last_out??'Still Inside'}</div>
+      <div style="background:${hasOut?'#FFF1F2':'#F8FAFC'};border:1.5px solid ${hasOut?'#FCA5A5':'#E5E7EB'};border-radius:12px;padding:14px 16px;">
+        <div style="font-size:10px;font-weight:700;color:${hasOut?'#DC2626':'#94A3B8'};text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px;">↓ LAST OUT</div>
+        <div style="font-size:22px;font-weight:800;color:${hasOut?'#0F172A':'#CBD5E1'};line-height:1;letter-spacing:-.5px;">${sum?.last_out??'Still Inside'}</div>
       </div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px;">
-      <div style="background:#F8FAFC;border:1px solid #E5E7EB;border-radius:9px;padding:10px;text-align:center;">
-        <div style="font-size:10px;color:#94A3B8;font-weight:600;margin-bottom:4px;">HOURS</div>
-        <div style="font-size:15px;font-weight:800;color:#0F172A;">${sum?.working_hours??'—'}</div>
+    <div style="background:#F8FAFC;border:1px solid #E5E7EB;border-radius:12px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;">
+      <div>
+        <div style="font-size:10px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px;">⏱ HOURS WORKED</div>
+        <div style="font-size:22px;font-weight:800;color:#0F172A;line-height:1;letter-spacing:-.5px;">${sum?.working_hours??'—'}</div>
       </div>
-      <div style="background:#F8FAFC;border:1px solid #E5E7EB;border-radius:9px;padding:10px;text-align:center;">
-        <div style="font-size:10px;color:#94A3B8;font-weight:600;margin-bottom:4px;">SESSIONS</div>
-        <div style="font-size:15px;font-weight:800;color:#0F172A;">${sum?.total_sessions??0}</div>
-      </div>
-      <div style="background:${sc.bg};border:1px solid #E5E7EB;border-radius:9px;padding:10px;text-align:center;">
-        <div style="font-size:10px;color:#94A3B8;font-weight:600;margin-bottom:4px;">STATUS</div>
-        <div style="font-size:12px;font-weight:700;color:${sc.color};">${sc.label}</div>
+      <div style="text-align:right;">
+        <div style="font-size:10px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px;">SESSIONS</div>
+        <div style="font-size:22px;font-weight:800;color:#0F172A;line-height:1;">${sessions.length}</div>
       </div>
     </div>`;
 
-  // Session cards
-  const sessionCards = sessions.length ? `
-    <div style="margin-bottom:16px;">
-      <div class="section-label">Today's Sessions</div>
-      ${sessions.map(s => `
-        <div class="session-card" style="margin-bottom:8px;">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-            <span style="font-size:11px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.05em;">Session ${s.index}</span>
-            ${s.admin_note ? `<span style="font-size:11px;color:#7C3AED;font-weight:600;">Corrected</span>` : ''}
+  // ── Today's Attendance Journey ─────────────────────────────
+  // Build a linear story: CHECK-IN → worked Xh → CHECK-OUT → break → CHECK-IN …
+  let journeyHtml = '';
+  const LINE = `<div style="width:2px;background:#E5E7EB;margin:0 auto;height:20px;"></div>`;
+
+  sessions.forEach((s, i) => {
+    const nextSession = sessions[i + 1] ?? null;
+
+    // CHECK-IN node
+    journeyHtml += `
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 0;">
+        <div style="width:32px;height:32px;border-radius:50%;background:#ECFDF5;border:2px solid #86EFAC;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <div style="width:10px;height:10px;border-radius:50%;background:#059669;"></div>
+        </div>
+        <div>
+          <div style="font-size:10.5px;font-weight:700;color:#059669;text-transform:uppercase;letter-spacing:.06em;">Check-In</div>
+          <div style="font-size:16px;font-weight:800;color:#0F172A;line-height:1.2;margin-top:2px;">${s.check_in??'—'}</div>
+        </div>
+      </div>`;
+
+    if (s.check_out) {
+      // Worked duration connector
+      journeyHtml += `
+        <div style="display:flex;gap:12px;align-items:stretch;">
+          <div style="width:32px;display:flex;justify-content:center;flex-shrink:0;">
+            <div style="width:2px;background:linear-gradient(#86EFAC,#FCA5A5);border-radius:2px;"></div>
           </div>
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-            <div style="display:flex;align-items:center;gap:5px;">
-              <span class="dot dot-green"></span>
-              <span style="font-size:13.5px;font-weight:700;color:#0F172A;">${s.check_in??'—'}</span>
-            </div>
-            <span style="color:#CBD5E1;font-size:16px;">→</span>
-            <div style="display:flex;align-items:center;gap:5px;">
-              <span class="dot ${s.check_out?'dot-red':'dot-gray'}"></span>
-              <span style="font-size:13.5px;font-weight:700;color:${s.check_out?'#0F172A':'#94A3B8'};">${s.check_out??'In Office'}</span>
-            </div>
-            ${s.duration ? `<span style="font-size:11.5px;color:#64748B;font-weight:500;margin-left:auto;">${s.duration}</span>` : ''}
+          <div style="padding:6px 0 6px 0;display:flex;align-items:center;">
+            <span style="font-size:12px;font-weight:600;color:#64748B;">${s.duration ? 'Worked ' + s.duration : ''}</span>
           </div>
-        </div>`).join('')}
+        </div>`;
+
+      // CHECK-OUT node
+      journeyHtml += `
+        <div style="display:flex;align-items:center;gap:12px;padding:10px 0;">
+          <div style="width:32px;height:32px;border-radius:50%;background:#FFF1F2;border:2px solid #FCA5A5;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <div style="width:10px;height:10px;border-radius:50%;background:#DC2626;"></div>
+          </div>
+          <div>
+            <div style="font-size:10.5px;font-weight:700;color:#DC2626;text-transform:uppercase;letter-spacing:.06em;">Check-Out</div>
+            <div style="font-size:16px;font-weight:800;color:#0F172A;line-height:1.2;margin-top:2px;">${s.check_out}</div>
+          </div>
+        </div>`;
+
+      // Break between sessions
+      if (nextSession) {
+        journeyHtml += `
+          <div style="display:flex;gap:12px;align-items:stretch;">
+            <div style="width:32px;display:flex;justify-content:center;flex-shrink:0;">
+              <div style="width:2px;background:#E5E7EB;border-radius:2px;"></div>
+            </div>
+            <div style="padding:6px 0;display:flex;align-items:center;">
+              <span style="font-size:11.5px;color:#94A3B8;font-weight:500;font-style:italic;">Break</span>
+            </div>
+          </div>`;
+      }
+    } else {
+      // Open session — still in office
+      journeyHtml += `
+        <div style="display:flex;gap:12px;align-items:stretch;">
+          <div style="width:32px;display:flex;justify-content:center;flex-shrink:0;">
+            <div style="width:2px;background:linear-gradient(#86EFAC,#BFDBFE);border-radius:2px;animation:pulse 2s infinite;"></div>
+          </div>
+          <div style="padding:8px 0;display:flex;align-items:center;">
+            <span style="font-size:12px;font-weight:600;color:#2563EB;">Currently In Office</span>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;padding:6px 0;">
+          <div style="width:32px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <div style="width:10px;height:10px;border-radius:50%;background:#2563EB;animation:pulse 2s infinite;"></div>
+          </div>
+          <span style="font-size:12px;color:#64748B;font-weight:500;">Still inside as of now</span>
+        </div>`;
+    }
+  });
+
+  // Duplicate scans note
+  const dupNote = dupCount > 0 ? `
+    <div style="margin-top:12px;padding:8px 12px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;font-size:12px;color:#92400E;font-weight:500;">
+      ${dupCount} duplicate scan${dupCount > 1 ? 's' : ''} detected and hidden — device rescanned within 90 seconds.
     </div>` : '';
 
-  // Timeline events (CHECK-IN / CHECK-OUT only — no SCAN noise)
-  const evStyles = {
-    check_in:  { color:'#059669', bg:'#ECFDF5', border:'#BBF7D0', label:'CHECK-IN'  },
-    check_out: { color:'#DC2626', bg:'#FEF2F2', border:'#FECDD3', label:'CHECK-OUT' },
-    duplicate: { color:'#D97706', bg:'#FFFBEB', border:'#FDE68A', label:'DUPLICATE' },
-  };
-
-  const visEvs = events.filter(e => !e.is_duplicate);
-  const dupEvs = events.filter(e => e.is_duplicate);
-
-  const buildEv = ev => {
-    const s = evStyles[ev.type] ?? { color:'#94A3B8', bg:'#F8FAFC', border:'#E5E7EB', label:'SCAN' };
-    return `
-    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #F8FAFC;">
-      <div style="width:8px;height:8px;border-radius:50%;background:${s.color};flex-shrink:0;"></div>
-      <div style="display:inline-flex;align-items:center;gap:6px;background:${s.bg};border:1px solid ${s.border};border-radius:6px;padding:3px 10px;">
-        <span style="font-size:11px;font-weight:700;color:${s.color};letter-spacing:.04em;">${s.label}</span>
-      </div>
-      <span style="font-size:13.5px;font-weight:700;color:#0F172A;margin-left:auto;">${ev.time}</span>
-    </div>`;
-  };
-
-  const dupSection = dupEvs.length ? `
-    <button onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none';this.textContent=this.textContent.startsWith('+')?'− Hide':'+ ${dupEvs.length} duplicate scan${dupEvs.length>1?'s':''} hidden';"
-      style="font-size:11.5px;color:#94A3B8;background:none;border:none;cursor:pointer;padding:6px 0;font-family:inherit;width:100%;text-align:left;">
-      + ${dupEvs.length} duplicate scan${dupEvs.length>1?'s':''} hidden
-    </button>
-    <div style="display:none;border-left:2px solid #FEF3C7;padding-left:10px;margin-top:4px;">
-      ${dupEvs.map(buildEv).join('')}
-    </div>` : '';
-
-  el.innerHTML = empHeader + bigCards + sessionCards + `
-    <div>
-      <div class="section-label">Timeline</div>
-      ${visEvs.map(buildEv).join('')}
-      ${dupSection}
-    </div>`;
-}
-
-function toggleDups(btn) {
-  const panel = btn.nextElementSibling;
-  const hidden = panel.style.display === 'none';
-  panel.style.display = hidden ? 'block' : 'none';
-  const n = panel.querySelectorAll('.tl-connector').length;
-  btn.textContent = hidden
-    ? `− ${n} duplicate scan${n>1?'s':''} visible`
-    : `+ ${n} duplicate scan${n>1?'s':''} hidden`;
+  el.innerHTML = empHeader + statCards + `
+    <div style="font-size:10.5px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px;">Today's Attendance Journey</div>
+    <div style="background:#F8FAFC;border:1px solid #E5E7EB;border-radius:12px;padding:8px 16px;">
+      ${journeyHtml}
+    </div>
+    ${dupNote}`;
 }
 
 // ═══════════════════ STATS ═══════════════════

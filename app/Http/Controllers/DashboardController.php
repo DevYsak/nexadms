@@ -82,17 +82,25 @@ class DashboardController extends Controller
             ->get()
             ->keyBy('employee_code');
 
-        // Auto-recalculate sessions for employees who have punches but no sessions yet.
+        $svc = app(AttendanceRecalculationService::class);
+
+        // Recalculate when: (a) sessions missing, OR (b) any punch still has
+        // event_type='unknown' meaning sessions were built before the pairing algorithm.
         $existingSessionCodes = AttendanceSession::whereIn('employee_code', $codes)
             ->where('session_date', $date)
             ->distinct('employee_code')
             ->pluck('employee_code')
-            ->flip()
-            ->toArray();
+            ->flip()->toArray();
 
-        $svc = app(AttendanceRecalculationService::class);
+        $staleEventCodes = BiometricAttendance::whereIn('employee_code', $codes)
+            ->whereDate('punch_time', $date)
+            ->where('event_type', 'unknown')
+            ->distinct('employee_code')
+            ->pluck('employee_code')
+            ->flip()->toArray();
+
         foreach ($punchCounts as $code => $row) {
-            if (!isset($existingSessionCodes[$code])) {
+            if (! isset($existingSessionCodes[$code]) || isset($staleEventCodes[$code])) {
                 $svc->recalculate($code, $date);
             }
         }
@@ -172,10 +180,12 @@ class DashboardController extends Controller
             'color'      => $employee->avatar_color,
         ] : ['name' => 'Employee ' . $code, 'department' => '-', 'initials' => strtoupper(substr($code, 0, 2)), 'color' => '#6366f1'];
 
-        // Auto-recalculate sessions if not yet built for this date
-        $hasSession = AttendanceSession::where('employee_code', $code)
-            ->where('session_date', $date)->exists();
-        if (! $hasSession) {
+        // Recalculate when sessions are missing OR any punch is still 'unknown'
+        // (unknown = sessions were built before the pairing algorithm was in place)
+        $needsRecalc = ! AttendanceSession::where('employee_code', $code)->where('session_date', $date)->exists()
+            || BiometricAttendance::where('employee_code', $code)->whereDate('punch_time', $date)->where('event_type', 'unknown')->exists();
+
+        if ($needsRecalc) {
             app(AttendanceRecalculationService::class)->recalculate($code, $date);
         }
 
