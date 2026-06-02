@@ -3,537 +3,608 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>BioSync — Attendance Dashboard</title>
+<title>BioSync — Attendance</title>
 <script src="https://cdn.tailwindcss.com"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-  * { font-family: 'Inter', system-ui, sans-serif; }
-  .scrollbar-thin::-webkit-scrollbar { width: 4px; height: 4px; }
-  .scrollbar-thin::-webkit-scrollbar-track { background: #1e293b; }
-  .scrollbar-thin::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
-  .pulse-dot { animation: pulse-anim 2s infinite; }
-  @keyframes pulse-anim { 0%,100%{opacity:1} 50%{opacity:.4} }
-  .badge { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold; }
-  .fade-in { animation: fadeIn .3s ease; }
-  @keyframes fadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:none} }
-  .timeline-line::before { content:''; position:absolute; left:20px; top:0; bottom:0; width:2px; background:#e2e8f0; z-index:0; }
-  .dark .timeline-line::before { background:#334155; }
-  tr.hover-row:hover { background:#f8fafc; cursor:pointer; }
-  .dark tr.hover-row:hover { background:#1e293b; }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: #F8FAFC; color: #0F172A; }
+
+  /* Scrollbars */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #E2E8F0; border-radius: 99px; }
+  ::-webkit-scrollbar-thumb:hover { background: #CBD5E1; }
+
+  /* Sidebar nav active */
+  .nav-item { display:flex; align-items:center; gap:10px; padding:7px 12px; border-radius:8px; font-size:13.5px; font-weight:500; color:#64748B; cursor:pointer; transition:all .15s; border:none; background:none; width:100%; text-align:left; }
+  .nav-item:hover { background:#F1F5F9; color:#0F172A; }
+  .nav-item.active { background:#EFF6FF; color:#2563EB; font-weight:600; }
+  .nav-item svg { flex-shrink:0; opacity:.7; }
+  .nav-item.active svg { opacity:1; }
+
+  /* KPI Cards */
+  .kpi-card { background:#fff; border:1px solid #E5E7EB; border-radius:12px; padding:20px; display:flex; flex-direction:column; gap:12px; transition:box-shadow .15s; }
+  .kpi-card:hover { box-shadow:0 4px 16px rgba(0,0,0,.06); }
+
+  /* Table */
+  .data-table { width:100%; border-collapse:collapse; font-size:13.5px; }
+  .data-table thead th { padding:10px 16px; text-align:left; font-size:11px; font-weight:600; color:#64748B; text-transform:uppercase; letter-spacing:.04em; background:#F8FAFC; border-bottom:1px solid #E5E7EB; white-space:nowrap; position:sticky; top:0; z-index:10; }
+  .data-table tbody tr { border-bottom:1px solid #F1F5F9; transition:background .1s; cursor:pointer; }
+  .data-table tbody tr:last-child { border-bottom:none; }
+  .data-table tbody tr:hover { background:#F8FAFC; }
+  .data-table tbody tr.selected { background:#EFF6FF; }
+  .data-table td { padding:12px 16px; vertical-align:middle; }
+
+  /* Status badges */
+  .badge { display:inline-flex; align-items:center; gap:4px; padding:3px 10px; border-radius:99px; font-size:11.5px; font-weight:600; white-space:nowrap; }
+  .badge-green  { background:#ECFDF5; color:#059669; }
+  .badge-blue   { background:#EFF6FF; color:#2563EB; }
+  .badge-amber  { background:#FFFBEB; color:#D97706; }
+  .badge-red    { background:#FEF2F2; color:#DC2626; }
+  .badge-orange { background:#FFF7ED; color:#EA580C; }
+  .badge-gray   { background:#F1F5F9; color:#64748B; }
+
+  /* Pill dot */
+  .dot { width:6px; height:6px; border-radius:50%; display:inline-block; flex-shrink:0; }
+  .dot-green  { background:#10B981; }
+  .dot-blue   { background:#2563EB; }
+  .dot-amber  { background:#F59E0B; }
+  .dot-red    { background:#EF4444; }
+  .dot-gray   { background:#94A3B8; }
+
+  /* Pulse */
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+  .pulse { animation:pulse 2s infinite; }
+
+  /* Fade in rows */
+  @keyframes fadeUp { from{opacity:0;transform:translateY(3px)} to{opacity:1;transform:none} }
+  .fade-up { animation:fadeUp .2s ease both; }
+
+  /* Filter toolbar inputs */
+  .tb-input { height:36px; border:1px solid #E5E7EB; border-radius:8px; padding:0 12px; font-size:13px; color:#0F172A; background:#fff; outline:none; font-family:inherit; }
+  .tb-input:focus { border-color:#2563EB; box-shadow:0 0 0 3px rgba(37,99,235,.1); }
+  .tb-btn-primary { height:36px; padding:0 16px; background:#2563EB; color:#fff; border:none; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; transition:background .15s; }
+  .tb-btn-primary:hover { background:#1D4ED8; }
+  .tb-btn-ghost { height:36px; padding:0 14px; background:#fff; color:#64748B; border:1px solid #E5E7EB; border-radius:8px; font-size:13px; font-weight:500; cursor:pointer; font-family:inherit; transition:all .15s; }
+  .tb-btn-ghost:hover { background:#F8FAFC; color:#0F172A; }
+  .tb-btn-export { height:36px; padding:0 14px; background:#fff; color:#059669; border:1px solid #D1FAE5; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; display:inline-flex; align-items:center; gap:6px; transition:all .15s; }
+  .tb-btn-export:hover { background:#ECFDF5; }
+
+  /* Avatar */
+  .avatar { width:32px; height:32px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:#fff; flex-shrink:0; }
+
+  /* Timeline event dot connector */
+  .tl-connector { width:1px; flex:1; background:#E5E7EB; min-height:12px; margin:3px 0; }
+
+  /* Section label */
+  .section-label { font-size:10.5px; font-weight:700; color:#94A3B8; text-transform:uppercase; letter-spacing:.07em; margin-bottom:8px; }
+
+  /* Session card */
+  .session-card { background:#F8FAFC; border:1px solid #E5E7EB; border-radius:10px; padding:12px 14px; }
+
+  /* Pagination */
+  .pg-btn { min-width:32px; height:32px; padding:0 8px; border:1px solid #E5E7EB; border-radius:7px; background:#fff; font-size:12.5px; color:#64748B; cursor:pointer; font-family:inherit; transition:all .15s; }
+  .pg-btn:hover:not(:disabled) { background:#F8FAFC; color:#0F172A; }
+  .pg-btn.active { background:#2563EB; border-color:#2563EB; color:#fff; font-weight:600; }
+  .pg-btn:disabled { opacity:.4; cursor:not-allowed; }
+
+  /* Spin */
+  @keyframes spin { to{transform:rotate(360deg)} }
+  .spin { animation:spin .6s linear infinite; }
+
+  /* Card shadow */
+  .card { background:#fff; border:1px solid #E5E7EB; border-radius:12px; }
 </style>
 </head>
 
-<body class="bg-slate-50 text-slate-800" id="body">
-<div class="flex h-screen overflow-hidden">
+<body>
+<div style="display:flex;height:100vh;overflow:hidden;">
 
-  {{-- ──────────────────────────── SIDEBAR ──────────────────────────────── --}}
-  <aside class="w-60 bg-slate-900 text-slate-300 flex flex-col flex-shrink-0 overflow-y-auto scrollbar-thin">
+  {{-- ═══════════════════════════ SIDEBAR ═══════════════════════════ --}}
+  <aside style="width:220px;flex-shrink:0;background:#fff;border-right:1px solid #E5E7EB;display:flex;flex-direction:column;overflow-y:auto;">
+
     {{-- Logo --}}
-    <div class="px-5 py-5 flex items-center gap-3 border-b border-slate-700/50">
-      <div class="size-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center flex-shrink-0">
-        <svg class="size-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"/></svg>
-      </div>
-      <div>
-        <div class="text-white font-bold text-sm leading-tight">BioSync</div>
-        <div class="text-xs text-slate-500">Attendance System</div>
+    <div style="padding:18px 16px 14px;border-bottom:1px solid #F1F5F9;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#2563EB,#7C3AED);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <svg width="16" height="16" fill="none" stroke="#fff" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"/></svg>
+        </div>
+        <div>
+          <div style="font-size:14px;font-weight:700;color:#0F172A;line-height:1.2;">BioSync</div>
+          <div style="font-size:11px;color:#94A3B8;margin-top:1px;">Attendance System</div>
+        </div>
       </div>
     </div>
 
-    {{-- Nav --}}
-    <nav class="flex-1 px-3 py-4 space-y-0.5">
+    {{-- Navigation --}}
+    <nav style="flex:1;padding:10px 10px;">
       @php
-        $navItems = [
-          ['icon'=>'home','label'=>'Dashboard','id'=>'nav-dash'],
-          ['icon'=>'list','label'=>'Attendance Log','id'=>'nav-log','active'=>true],
-          ['icon'=>'monitor','label'=>'Live Monitor','id'=>'nav-live'],
-          ['icon'=>'users','label'=>'Employees','id'=>'nav-emp'],
-          ['icon'=>'device','label'=>'Devices','id'=>'nav-dev'],
-          ['icon'=>'chart','label'=>'Reports','id'=>'nav-rep'],
-          ['icon'=>'sync','label'=>'Sync Status','id'=>'nav-sync'],
-          ['icon'=>'cog','label'=>'Settings','id'=>'nav-set'],
+        $nav = [
+          ['id'=>'nav-dash', 'label'=>'Dashboard',    'icon'=>'home'],
+          ['id'=>'nav-log',  'label'=>'Attendance',   'icon'=>'list',  'active'=>true],
+          ['id'=>'nav-live', 'label'=>'Live Monitor', 'icon'=>'activity'],
+          ['id'=>'nav-emp',  'label'=>'Employees',    'icon'=>'users'],
+          ['id'=>'nav-dev',  'label'=>'Devices',      'icon'=>'cpu'],
+          ['id'=>'nav-rep',  'label'=>'Reports',      'icon'=>'bar-chart'],
+          ['id'=>'nav-sync', 'label'=>'Sync Status',  'icon'=>'refresh-cw'],
+          ['id'=>'nav-set',  'label'=>'Settings',     'icon'=>'settings'],
         ];
       @endphp
-      @foreach($navItems as $item)
-        <button onclick="setPage('{{ $item['id'] }}')" id="{{ $item['id'] }}"
-          class="sidebar-nav w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all
-            {{ ($item['active'] ?? false) ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white' }}">
-          @if($item['icon'] === 'home')
-            <svg class="size-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
-          @elseif($item['icon'] === 'list')
-            <svg class="size-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
-          @elseif($item['icon'] === 'users')
-            <svg class="size-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
-          @elseif($item['icon'] === 'chart')
-            <svg class="size-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-          @else
-            <svg class="size-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
-          @endif
-          {{ $item['label'] }}
-        </button>
+      @foreach($nav as $item)
+      <button onclick="setNav('{{ $item['id'] }}')" id="{{ $item['id'] }}"
+        class="nav-item {{ ($item['active'] ?? false) ? 'active' : '' }}">
+        @if($item['icon']==='home')
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+        @elseif($item['icon']==='list')
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+        @elseif($item['icon']==='activity')
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        @elseif($item['icon']==='users')
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path stroke-linecap="round" stroke-linejoin="round" d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+        @elseif($item['icon']==='cpu')
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/></svg>
+        @elseif($item['icon']==='bar-chart')
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        @elseif($item['icon']==='refresh-cw')
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+        @else
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93A10 10 0 0 0 4.93 19.07"/><path d="M19.07 19.07A10 10 0 0 0 4.93 4.93"/></svg>
+        @endif
+        {{ $item['label'] }}
+      </button>
       @endforeach
     </nav>
 
-    {{-- Device Sync Status --}}
-    <div class="px-3 pb-4">
-      <div class="bg-slate-800 rounded-xl p-3 text-xs space-y-2">
-        <div class="flex items-center justify-between text-slate-400 font-semibold uppercase tracking-wider text-[10px]">
-          <span>Device Sync Status</span>
-          <span class="size-2 rounded-full bg-emerald-500 pulse-dot"></span>
+    {{-- Sync Widget --}}
+    <div style="padding:12px 10px 14px;border-top:1px solid #F1F5F9;">
+      <div style="background:#F8FAFC;border:1px solid #E5E7EB;border-radius:10px;padding:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <span style="font-size:10.5px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.06em;">Device Sync</span>
+          <span class="dot dot-green pulse"></span>
         </div>
-        <div id="sidebar-sync-status" class="space-y-1 text-slate-400">
-          <div class="text-slate-300 font-semibold">Loading...</div>
-        </div>
-        <div id="next-sync-countdown" class="text-blue-400 font-mono text-center text-[11px] pt-1">
-          Next Auto Sync in <span id="countdown">00:00:05</span>
+        <div id="sidebar-sync-status" style="font-size:12px;color:#64748B;">Loading…</div>
+        <div style="margin-top:8px;font-size:11px;color:#94A3B8;text-align:center;">
+          Next sync in <span id="countdown" style="font-weight:600;color:#2563EB;font-variant-numeric:tabular-nums;">0:05</span>
         </div>
       </div>
     </div>
   </aside>
 
-  {{-- ──────────────────────────── MAIN AREA ─────────────────────────────── --}}
-  <div class="flex-1 flex flex-col overflow-hidden">
+  {{-- ═══════════════════════════ MAIN ═══════════════════════════ --}}
+  <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;">
 
-    {{-- Header --}}
-    <header class="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between flex-shrink-0">
-      <div>
-        <h1 class="text-2xl font-bold text-slate-900">Attendance Log</h1>
-        <p class="text-sm text-slate-500 mt-0.5">Live biometric attendance with auto-refresh every 5 seconds.</p>
+    {{-- Top Header --}}
+    <header style="background:#fff;border-bottom:1px solid #E5E7EB;padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:16px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <h1 style="font-size:15px;font-weight:700;color:#0F172A;margin:0;">Attendance</h1>
+        <span style="font-size:12px;color:#94A3B8;font-weight:400;">/ Daily Log</span>
       </div>
-      <div class="flex items-center gap-4">
-        <div class="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1.5">
-          <span class="size-2 rounded-full bg-emerald-500 pulse-dot"></span>
-          <span class="text-xs font-semibold text-emerald-700">Live sync active</span>
-          <span class="text-xs text-emerald-600" id="last-sync-time">Updated just now</span>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="display:flex;align-items:center;gap:6px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:99px;padding:4px 12px;">
+          <span class="dot dot-green pulse"></span>
+          <span style="font-size:12px;font-weight:600;color:#16A34A;">Live</span>
+          <span style="font-size:12px;color:#64748B;" id="last-sync-time">just now</span>
         </div>
-        <input type="date" id="date-filter" value="{{ $date }}"
-          class="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <input type="date" id="date-filter" value="{{ $date }}" class="tb-input" style="width:148px;">
       </div>
     </header>
 
-    {{-- Scrollable content --}}
-    <div class="flex-1 overflow-y-auto scrollbar-thin p-6 space-y-6">
+    {{-- Scrollable body --}}
+    <div style="flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:16px;">
 
-      {{-- Stats Cards --}}
-      <div class="grid grid-cols-2 xl:grid-cols-6 gap-4">
+      {{-- KPI Row --}}
+      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px;">
         @php
-        $statCards = [
-          ['id'=>'stat-total-emp', 'label'=>'Total Employees','val'=>$stats['total_employees'],'icon'=>'users','bg'=>'bg-blue-50','icon_bg'=>'bg-blue-500','text'=>'text-blue-600'],
-          ['id'=>'stat-present',   'label'=>'Present Today',  'val'=>$stats['present'],         'icon'=>'check','bg'=>'bg-emerald-50','icon_bg'=>'bg-emerald-500','text'=>'text-emerald-600'],
-          ['id'=>'stat-absent',    'label'=>'Absent Today',   'val'=>$stats['absent'],          'icon'=>'x','bg'=>'bg-red-50','icon_bg'=>'bg-red-500','text'=>'text-red-600'],
-          ['id'=>'stat-late',      'label'=>'Late Arrivals',  'val'=>$stats['late'],            'icon'=>'clock','bg'=>'bg-amber-50','icon_bg'=>'bg-amber-500','text'=>'text-amber-600'],
-          ['id'=>'stat-punches',   'label'=>'Total Punches',  'val'=>$stats['total_punches'],   'icon'=>'finger','bg'=>'bg-violet-50','icon_bg'=>'bg-violet-500','text'=>'text-violet-600'],
-          ['id'=>'stat-devices',   'label'=>'Devices Online', 'val'=>$stats['devices_online'],  'icon'=>'device','bg'=>'bg-cyan-50','icon_bg'=>'bg-cyan-500','text'=>'text-cyan-600'],
-        ];
+          $kpis = [
+            ['id'=>'stat-total-emp','label'=>'Total Employees','val'=>$stats['total_employees'],'color'=>'#2563EB','bg'=>'#EFF6FF','icon'=>'users'],
+            ['id'=>'stat-present',  'label'=>'Present Today',  'val'=>$stats['present'],        'color'=>'#059669','bg'=>'#ECFDF5','icon'=>'check'],
+            ['id'=>'stat-absent',   'label'=>'Absent Today',   'val'=>$stats['absent'],         'color'=>'#DC2626','bg'=>'#FEF2F2','icon'=>'x'],
+            ['id'=>'stat-late',     'label'=>'Late Arrivals',  'val'=>$stats['late'],           'color'=>'#D97706','bg'=>'#FFFBEB','icon'=>'clock'],
+            ['id'=>'stat-punches',  'label'=>'Total Scans',    'val'=>$stats['total_punches'],  'color'=>'#7C3AED','bg'=>'#F5F3FF','icon'=>'finger'],
+            ['id'=>'stat-devices',  'label'=>'Devices Online', 'val'=>$stats['devices_online'], 'color'=>'#0891B2','bg'=>'#ECFEFF','icon'=>'wifi'],
+          ];
         @endphp
-        @foreach($statCards as $card)
-        <div class="{{ $card['bg'] }} rounded-2xl p-4 flex items-center gap-3">
-          <div class="size-11 {{ $card['icon_bg'] }} rounded-xl flex items-center justify-center flex-shrink-0">
-            <svg class="size-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-              @if($card['icon']==='users')   <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
-              @elseif($card['icon']==='check') <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-              @elseif($card['icon']==='x')   <path stroke-linecap="round" stroke-linejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-              @elseif($card['icon']==='clock') <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-              @elseif($card['icon']==='finger') <path stroke-linecap="round" stroke-linejoin="round" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"/>
-              @else <path stroke-linecap="round" stroke-linejoin="round" d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/>
-              @endif
-            </svg>
+        @foreach($kpis as $k)
+        <div class="kpi-card">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <span style="font-size:12px;font-weight:500;color:#64748B;">{{ $k['label'] }}</span>
+            <div style="width:32px;height:32px;border-radius:8px;background:{{ $k['bg'] }};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <svg width="15" height="15" fill="none" stroke="{{ $k['color'] }}" stroke-width="2" viewBox="0 0 24 24">
+                @if($k['icon']==='users')   <path stroke-linecap="round" stroke-linejoin="round" d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path stroke-linecap="round" stroke-linejoin="round" d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
+                @elseif($k['icon']==='check') <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                @elseif($k['icon']==='x')   <path stroke-linecap="round" stroke-linejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                @elseif($k['icon']==='clock') <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                @elseif($k['icon']==='finger') <path stroke-linecap="round" stroke-linejoin="round" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"/>
+                @else <path stroke-linecap="round" stroke-linejoin="round" d="M5 12.55a11 11 0 0114.08 0"/><path stroke-linecap="round" stroke-linejoin="round" d="M1.42 9a16 16 0 0121.16 0"/><path stroke-linecap="round" stroke-linejoin="round" d="M8.53 16.11a6 6 0 016.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>
+                @endif
+              </svg>
+            </div>
           </div>
           <div>
-            <div class="text-2xl font-black {{ $card['text'] }}" id="{{ $card['id'] }}">{{ $card['val'] }}</div>
-            <div class="text-xs text-slate-500 font-medium leading-tight mt-0.5">{{ $card['label'] }}</div>
+            <div style="font-size:28px;font-weight:800;color:#0F172A;line-height:1;" id="{{ $k['id'] }}">{{ $k['val'] }}</div>
           </div>
         </div>
         @endforeach
       </div>
 
-      {{-- Filter Bar --}}
-      <div class="bg-white rounded-2xl border border-slate-200 p-4 flex flex-wrap gap-3 items-end">
-        <div class="flex-1 min-w-48">
-          <input type="text" id="search-input" placeholder="Search by name or code…"
-            class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+      {{-- Toolbar --}}
+      <div class="card" style="padding:12px 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <div style="position:relative;flex:1;min-width:200px;">
+          <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);pointer-events:none;" width="14" height="14" fill="none" stroke="#94A3B8" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="search-input" placeholder="Search employee name or code…" class="tb-input" style="padding-left:32px;width:100%;">
         </div>
-        <select id="dept-filter" class="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <select id="dept-filter" class="tb-input" style="min-width:150px;">
           <option value="">All Departments</option>
           @foreach($departments as $dept)
             <option value="{{ $dept }}" {{ $department === $dept ? 'selected' : '' }}>{{ $dept }}</option>
           @endforeach
         </select>
-        <select id="device-filter" class="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <select id="device-filter" class="tb-input" style="min-width:140px;">
           <option value="">All Devices</option>
           @foreach($devices as $device)
             <option value="{{ $device->id }}" {{ $deviceId == $device->id ? 'selected' : '' }}>{{ $device->serial_number }}</option>
           @endforeach
         </select>
-        <button onclick="applyFilters()" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm px-5 py-2 rounded-lg transition-colors">Filter</button>
-        <button onclick="resetFilters()" class="border border-slate-200 text-slate-600 hover:bg-slate-50 font-semibold text-sm px-5 py-2 rounded-lg transition-colors">Reset</button>
-        <button onclick="exportExcel()" class="flex items-center gap-2 border border-emerald-300 text-emerald-700 hover:bg-emerald-50 font-semibold text-sm px-4 py-2 rounded-lg transition-colors ml-auto">
-          <svg class="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-          Export Excel
-        </button>
+        <button onclick="applyFilters()" class="tb-btn-primary">Apply</button>
+        <button onclick="resetFilters()" class="tb-btn-ghost">Reset</button>
+        <div style="margin-left:auto;">
+          <button onclick="exportExcel()" class="tb-btn-export">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            Export
+          </button>
+        </div>
       </div>
 
-      {{-- Attendance Grid + Timeline --}}
-      <div class="flex gap-5 items-start">
+      {{-- Table + Detail Panel --}}
+      <div style="display:flex;gap:14px;align-items:flex-start;min-height:0;">
 
-        {{-- Attendance Grid --}}
-        <div class="flex-1 bg-white rounded-2xl border border-slate-200 overflow-hidden">
-          <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-            <h2 class="font-bold text-slate-800">Attendance Summary</h2>
-            <div id="grid-loading" class="hidden">
-              <svg class="animate-spin size-4 text-blue-500" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+        {{-- Attendance Table --}}
+        <div class="card" style="flex:1;overflow:hidden;display:flex;flex-direction:column;min-width:0;">
+          <div style="padding:14px 16px;border-bottom:1px solid #F1F5F9;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span style="font-size:13.5px;font-weight:700;color:#0F172A;">Attendance Summary</span>
+              <span id="total-badge" style="background:#F1F5F9;color:#64748B;font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;">0</span>
+            </div>
+            <div id="grid-loading" style="display:none;">
+              <svg class="spin" width="16" height="16" fill="none" stroke="#2563EB" stroke-width="2.5" viewBox="0 0 24 24"><path opacity=".25" stroke-linecap="round" d="M12 2a10 10 0 100 20A10 10 0 0012 2z"/><path stroke-linecap="round" d="M12 2a10 10 0 0110 10"/></svg>
             </div>
           </div>
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm">
+          <div style="overflow-x:auto;overflow-y:auto;max-height:calc(100vh - 340px);">
+            <table class="data-table">
               <thead>
-                <tr class="bg-slate-50 border-b border-slate-100">
-                  <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide w-8">#</th>
-                  <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Employee</th>
-                  <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Code</th>
-                  <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">First Check-In</th>
-                  <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Last Check-Out</th>
-                  <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Working Hours</th>
-                  <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
+                <tr>
+                  <th style="width:40px;">#</th>
+                  <th>Employee</th>
+                  <th>Code</th>
+                  <th>First Check-In</th>
+                  <th>Last Check-Out</th>
+                  <th>Working Hours</th>
+                  <th>Status</th>
                 </tr>
               </thead>
-              <tbody id="attendance-tbody" class="divide-y divide-slate-50">
-                <tr><td colspan="7" class="px-4 py-12 text-center text-slate-400">Loading attendance data…</td></tr>
+              <tbody id="attendance-tbody">
+                <tr><td colspan="7" style="text-align:center;padding:40px 16px;color:#94A3B8;font-size:13px;">Loading attendance data…</td></tr>
               </tbody>
             </table>
           </div>
-          {{-- Pagination --}}
-          <div class="px-5 py-3 border-t border-slate-100 flex items-center justify-between text-sm">
-            <span class="text-slate-500" id="pagination-info">Showing 0 records</span>
-            <div class="flex items-center gap-1" id="pagination-controls"></div>
+          <div style="padding:10px 16px;border-top:1px solid #F1F5F9;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+            <span style="font-size:12.5px;color:#64748B;" id="pagination-info">Showing 0 records</span>
+            <div style="display:flex;align-items:center;gap:4px;" id="pagination-controls"></div>
           </div>
         </div>
 
-        {{-- Employee Timeline --}}
-        <div class="w-96 flex-shrink-0 bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col" style="max-height:680px">
-          <div class="px-4 py-4 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
-            <h2 class="font-bold text-slate-800 text-sm">Employee Detail</h2>
-            <select id="timeline-emp-select" onchange="loadTimeline(this.value)"
-              class="text-xs border border-slate-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 max-w-44">
+        {{-- Employee Detail Panel --}}
+        <div class="card" id="detail-panel" style="width:360px;flex-shrink:0;display:flex;flex-direction:column;max-height:calc(100vh - 200px);overflow:hidden;">
+          <div style="padding:14px 16px;border-bottom:1px solid #F1F5F9;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+            <span style="font-size:13px;font-weight:700;color:#0F172A;">Employee Detail</span>
+            <select id="timeline-emp-select" onchange="loadTimeline(this.value)" class="tb-input" style="font-size:12px;height:30px;max-width:180px;">
               <option value="">Select employee</option>
               @foreach(\App\Models\Employee::active()->orderBy('name')->get() as $emp)
                 <option value="{{ $emp->employee_code }}">{{ $emp->name }} ({{ $emp->employee_code }})</option>
               @endforeach
             </select>
           </div>
-          <div id="timeline-content" class="px-4 py-4 overflow-y-auto scrollbar-thin flex-1">
-            <div class="text-center py-10 text-slate-400 text-sm">
-              <svg class="size-10 mx-auto mb-2 text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-              Select an employee to view their detail
+          <div id="timeline-content" style="flex:1;overflow-y:auto;padding:16px;">
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:180px;color:#94A3B8;gap:10px;">
+              <svg width="36" height="36" fill="none" stroke="#E2E8F0" stroke-width="1.5" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path stroke-linecap="round" d="M4 20c0-4 3.582-7 8-7s8 3 8 7"/></svg>
+              <span style="font-size:13px;">Select an employee</span>
             </div>
           </div>
         </div>
-      </div>
 
-      {{-- Sync Status Bar --}}
-      <div class="bg-white rounded-2xl border border-slate-200 p-5">
-        <h3 class="font-bold text-slate-800 mb-4">Sync &amp; Storage Information</h3>
-        <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <div class="text-center">
-            <div class="size-10 bg-green-100 rounded-xl flex items-center justify-center mx-auto mb-2">
-              <svg class="size-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-            </div>
-            <div class="text-xs text-slate-500">Last Device Sync</div>
-            <div class="text-sm font-bold text-slate-800 mt-0.5" id="sync-last-time">—</div>
-            <div class="text-xs text-green-600 font-semibold mt-0.5">Success</div>
-          </div>
-          <div class="text-center">
-            <div class="size-10 bg-red-100 rounded-xl flex items-center justify-center mx-auto mb-2">
-              <svg class="size-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-            </div>
-            <div class="text-xs text-slate-500">Total Un-Synced</div>
-            <div class="text-sm font-bold text-slate-800 mt-0.5" id="sync-unsynced">0</div>
-            <div class="text-xs text-slate-500 font-semibold mt-0.5">All records synced</div>
-          </div>
-          <div class="text-center">
-            <div class="size-10 bg-blue-100 rounded-xl flex items-center justify-center mx-auto mb-2">
-              <svg class="size-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-            </div>
-            <div class="text-xs text-slate-500">Auto Sync</div>
-            <div class="text-sm font-bold text-slate-800 mt-0.5">Every 5 Seconds</div>
-            <div class="text-xs text-blue-600 font-semibold mt-0.5">Enabled</div>
-          </div>
-          <div class="text-center">
-            <div class="size-10 bg-indigo-100 rounded-xl flex items-center justify-center mx-auto mb-2">
-              <svg class="size-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582 4-8 4"/></svg>
-            </div>
-            <div class="text-xs text-slate-500">Data Stored In</div>
-            <div class="text-sm font-bold text-slate-800 mt-0.5">MySQL Database</div>
-            <div class="text-xs text-indigo-600 font-semibold mt-0.5">attendance_logs table</div>
-          </div>
-          <div class="text-center">
-            <div class="size-10 bg-emerald-100 rounded-xl flex items-center justify-center mx-auto mb-2">
-              <svg class="size-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-            </div>
-            <div class="text-xs text-slate-500">Data Backup</div>
-            <div class="text-sm font-bold text-slate-800 mt-0.5">Daily at 11:59 PM</div>
-            <div class="text-xs text-emerald-600 font-semibold mt-0.5">Enabled</div>
-          </div>
-        </div>
-        <div class="mt-4 text-xs text-slate-400 text-center border-t border-slate-100 pt-4">
-          All attendance data is automatically stored in the database. Even if the system is shut down, data is safe and will be available when the system restarts.
-        </div>
       </div>
-
     </div>{{-- end scrollable --}}
   </div>{{-- end main --}}
 </div>
 
 <script>
-// ── State ───────────────────────────────────────────────────────────────────
-let currentPage    = 1;
-let currentDate    = document.getElementById('date-filter').value;
-let currentDept    = '';
-let currentDevice  = '';
-let currentSearch  = '';
-let countdownSecs  = 5;
-let refreshTimer;
+// ═══════════════════ STATE ═══════════════════
+let currentPage   = 1;
+let currentDate   = document.getElementById('date-filter').value;
+let currentDept   = '';
+let currentDevice = '';
+let currentSearch = '';
+let countdownSecs = 5;
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-const statusBadge = (status) => {
-  const map = {
-    present:            '<span class="badge bg-emerald-100 text-emerald-700">✓ Checked Out</span>',
-    checked_out:        '<span class="badge bg-emerald-100 text-emerald-700">✓ Checked Out</span>',
-    in_office:          '<span class="badge bg-blue-100 text-blue-700">● In Office</span>',
-    late:               '<span class="badge bg-amber-100 text-amber-700">⏰ Late</span>',
-    absent:             '<span class="badge bg-red-100 text-red-500">✗ Absent</span>',
-    missing_out:        '<span class="badge bg-orange-100 text-orange-700">⚠ Missing Out Punch</span>',
-    missing_in:         '<span class="badge bg-orange-100 text-orange-700">⚠ Missing In Punch</span>',
-    incomplete:         '<span class="badge bg-yellow-100 text-yellow-700">◑ Incomplete</span>',
+// ═══════════════════ HELPERS ═══════════════════
+const statusBadge = s => {
+  const m = {
+    present:     '<span class="badge badge-green"><span class="dot dot-green"></span>Checked Out</span>',
+    checked_out: '<span class="badge badge-green"><span class="dot dot-green"></span>Checked Out</span>',
+    in_office:   '<span class="badge badge-blue"><span class="dot dot-blue"></span>In Office</span>',
+    late:        '<span class="badge badge-amber"><span class="dot dot-amber"></span>Late</span>',
+    absent:      '<span class="badge badge-red"><span class="dot dot-red"></span>Absent</span>',
+    missing_out: '<span class="badge badge-orange">⚠ Missing Out</span>',
+    missing_in:  '<span class="badge badge-orange">⚠ Missing In</span>',
+    incomplete:  '<span class="badge badge-gray">Incomplete</span>',
   };
-  return map[status] || '<span class="badge bg-slate-100 text-slate-600">Unknown</span>';
+  return m[s] || '<span class="badge badge-gray">—</span>';
 };
 
 const avatar = (initials, color) =>
-  `<div class="size-9 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style="background:${color}">${initials}</div>`;
+  `<div class="avatar" style="background:${color};font-size:11px;">${initials}</div>`;
 
-// ── Grid Loading ─────────────────────────────────────────────────────────────
+const fmtTime = t => t
+  ? `<span style="color:#0F172A;font-weight:600;">${t}</span>`
+  : `<span style="color:#CBD5E1;">—</span>`;
+
+// ═══════════════════ GRID ═══════════════════
 async function loadGrid(page = 1) {
   currentPage = page;
-  document.getElementById('grid-loading').classList.remove('hidden');
+  document.getElementById('grid-loading').style.display = 'block';
 
   const params = new URLSearchParams({
     date: currentDate, department: currentDept, device: currentDevice,
-    search: currentSearch, page, per_page: 10,
+    search: currentSearch, page, per_page: 15,
   });
 
   try {
     const res  = await fetch(`/api/attendance/grid?${params}`, { headers: { Accept: 'application/json' } });
     const data = await res.json();
     renderGrid(data);
-    document.getElementById('last-sync-time').textContent = 'Updated ' + new Date().toLocaleTimeString();
+    document.getElementById('last-sync-time').textContent = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
   } catch(e) {
     document.getElementById('attendance-tbody').innerHTML =
-      '<tr><td colspan="8" class="px-4 py-8 text-center text-red-400 text-sm">Failed to load data. Retrying…</td></tr>';
+      `<tr><td colspan="7" style="text-align:center;padding:40px;color:#EF4444;font-size:13px;">Failed to load. Retrying…</td></tr>`;
   } finally {
-    document.getElementById('grid-loading').classList.add('hidden');
+    document.getElementById('grid-loading').style.display = 'none';
   }
 }
 
 function renderGrid(data) {
   const tbody = document.getElementById('attendance-tbody');
+  document.getElementById('total-badge').textContent = data.total;
+
   if (!data.rows.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-12 text-center text-slate-400 text-sm">No attendance records found.</td></tr>';
-    document.getElementById('pagination-info').textContent = 'Showing 0 records';
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:48px 16px;color:#94A3B8;font-size:13px;">No attendance records for this date.</td></tr>`;
+    document.getElementById('pagination-info').textContent = 'No records';
     document.getElementById('pagination-controls').innerHTML = '';
     return;
   }
 
   const offset = (data.page - 1) * data.per_page;
   tbody.innerHTML = data.rows.map((row, i) => `
-    <tr class="hover-row fade-in" onclick="loadTimeline('${row.code}'); document.getElementById('timeline-emp-select').value='${row.code}';">
-      <td class="px-4 py-3 text-slate-400 text-xs">${offset + i + 1}</td>
-      <td class="px-4 py-3">
-        <div class="flex items-center gap-3">
+    <tr class="fade-up" onclick="selectRow(this,'${row.code}')" style="animation-delay:${i*20}ms">
+      <td style="color:#CBD5E1;font-size:12px;font-weight:500;">${offset + i + 1}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:10px;">
           ${avatar(row.initials, row.avatar_color)}
           <div>
-            <div class="font-semibold text-slate-800 text-sm">${row.name}</div>
-            <div class="text-xs text-slate-400">${row.department}</div>
+            <div style="font-size:13.5px;font-weight:600;color:#0F172A;line-height:1.3;">${row.name}</div>
+            <div style="font-size:11.5px;color:#94A3B8;">${row.department || '—'}</div>
           </div>
         </div>
       </td>
-      <td class="px-4 py-3 text-slate-500 text-sm font-mono">${row.code}</td>
-      <td class="px-4 py-3 font-semibold text-emerald-600 text-sm">${row.first_in ? '↗ ' + row.first_in : '<span class="text-slate-300">--</span>'}</td>
-      <td class="px-4 py-3 font-semibold text-rose-500 text-sm">${row.last_out ? '↙ ' + row.last_out : '<span class="text-slate-300">--</span>'}</td>
-      <td class="px-4 py-3 text-slate-700 text-sm font-semibold">${row.working_hours ?? '<span class="text-slate-300 font-normal">--</span>'}</td>
-      <td class="px-4 py-3">${statusBadge(row.status)}</td>
+      <td><span style="font-size:12px;font-weight:500;color:#64748B;font-variant-numeric:tabular-nums;">${row.code}</span></td>
+      <td style="font-size:13px;">
+        ${row.first_in
+          ? `<span style="color:#059669;font-weight:600;">↑ ${row.first_in}</span>`
+          : `<span style="color:#CBD5E1;">—</span>`}
+      </td>
+      <td style="font-size:13px;">
+        ${row.last_out
+          ? `<span style="color:#DC2626;font-weight:600;">↓ ${row.last_out}</span>`
+          : `<span style="color:#CBD5E1;">—</span>`}
+      </td>
+      <td>
+        ${row.working_hours
+          ? `<span style="font-size:13px;font-weight:700;color:#0F172A;">${row.working_hours}</span>`
+          : `<span style="color:#CBD5E1;font-size:13px;">—</span>`}
+      </td>
+      <td>${statusBadge(row.status)}</td>
     </tr>
   `).join('');
 
-  const from = offset + 1;
-  const to   = offset + data.rows.length;
-  document.getElementById('pagination-info').textContent = `Showing ${from} to ${to} of ${data.total} records`;
+  const from = offset + 1, to = offset + data.rows.length;
+  document.getElementById('pagination-info').textContent = `${from}–${to} of ${data.total} employees`;
   renderPagination(data.page, data.last_page);
+}
+
+function selectRow(tr, code) {
+  document.querySelectorAll('.data-table tbody tr').forEach(r => r.classList.remove('selected'));
+  tr.classList.add('selected');
+  document.getElementById('timeline-emp-select').value = code;
+  loadTimeline(code);
 }
 
 function renderPagination(page, lastPage) {
   const el = document.getElementById('pagination-controls');
   if (lastPage <= 1) { el.innerHTML = ''; return; }
-
-  let html = `<button onclick="loadGrid(${page-1})" ${page===1?'disabled':''} class="px-3 py-1.5 text-sm border rounded-lg ${page===1?'opacity-40 cursor-not-allowed':''}">&lt;</button>`;
+  let h = `<button class="pg-btn" onclick="loadGrid(${page-1})" ${page===1?'disabled':''}>‹</button>`;
   for (let p = 1; p <= lastPage; p++) {
-    if (p === 1 || p === lastPage || (p >= page-1 && p <= page+1)) {
-      html += `<button onclick="loadGrid(${p})" class="px-3 py-1.5 text-sm border rounded-lg ${p===page?'bg-blue-600 text-white border-blue-600':'hover:bg-slate-50'}">${p}</button>`;
-    } else if (p === page-2 || p === page+2) {
-      html += `<span class="px-1 text-slate-400">…</span>`;
-    }
+    if (p===1 || p===lastPage || (p>=page-1 && p<=page+1)) {
+      h += `<button class="pg-btn ${p===page?'active':''}" onclick="loadGrid(${p})">${p}</button>`;
+    } else if (p===page-2||p===page+2) h += `<span style="color:#CBD5E1;padding:0 4px;font-size:12px;">…</span>`;
   }
-  html += `<button onclick="loadGrid(${page+1})" ${page===lastPage?'disabled':''} class="px-3 py-1.5 text-sm border rounded-lg ${page===lastPage?'opacity-40 cursor-not-allowed':''}">></button>`;
-  el.innerHTML = html;
+  h += `<button class="pg-btn" onclick="loadGrid(${page+1})" ${page===lastPage?'disabled':''}>›</button>`;
+  el.innerHTML = h;
 }
 
-// ── Timeline ──────────────────────────────────────────────────────────────────
+// ═══════════════════ TIMELINE ═══════════════════
 async function loadTimeline(code) {
   if (!code) return;
-  const content = document.getElementById('timeline-content');
-  content.innerHTML = '<div class="text-center py-8 text-slate-400 text-sm">Loading…</div>';
+  const el = document.getElementById('timeline-content');
+  el.innerHTML = `<div style="text-align:center;padding:48px 0;color:#94A3B8;font-size:13px;">Loading…</div>`;
 
-  const res  = await fetch(`/api/attendance/timeline/${code}?date=${currentDate}`);
-  const data = await res.json();
-  renderTimeline(data, content);
+  try {
+    const res  = await fetch(`/api/attendance/timeline/${code}?date=${currentDate}`);
+    const data = await res.json();
+    renderTimeline(data, el);
+  } catch(e) {
+    el.innerHTML = `<div style="text-align:center;padding:32px;color:#EF4444;font-size:13px;">Failed to load.</div>`;
+  }
 }
 
 function renderTimeline(data, el) {
-  const emp = data.employee;
+  const emp      = data.employee;
+  const sessions = data.sessions ?? [];
+  const events   = data.events   ?? [];
+  const sum      = data.summary;
 
-  if (!data.events || !data.events.length) {
+  if (!events.length) {
     el.innerHTML = `
-    <div class="flex items-center gap-3 mb-5 pb-4 border-b border-slate-100">
-      <div class="size-11 rounded-full flex items-center justify-center text-white font-bold" style="background:${emp?.color ?? '#6366f1'}">${emp?.initials ?? '?'}</div>
-      <div>
-        <div class="font-bold text-slate-800">${emp?.name ?? 'Employee'}</div>
-        <div class="text-xs text-slate-400">${emp?.department ?? '--'}</div>
+      <div style="display:flex;align-items:center;gap:10px;padding-bottom:14px;border-bottom:1px solid #F1F5F9;margin-bottom:14px;">
+        <div class="avatar" style="width:40px;height:40px;font-size:13px;background:${emp?.color??'#6366f1'}">${emp?.initials??'?'}</div>
+        <div>
+          <div style="font-size:14px;font-weight:700;color:#0F172A;">${emp?.name??'Employee'}</div>
+          <div style="font-size:12px;color:#94A3B8;">${emp?.department??'—'}</div>
+        </div>
       </div>
-    </div>
-    <div class="text-center py-8 text-slate-400 text-sm">No attendance recorded for this date.</div>`;
+      <div style="text-align:center;padding:32px 0;color:#94A3B8;font-size:13px;">No attendance recorded.</div>`;
     return;
   }
 
-  const sum = data.summary;
-  const sessions = data.sessions ?? [];
-
-  // Status label + style
-  const statusStyles = {
-    checked_out: { cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', label: '✓ Checked Out' },
-    in_office:   { cls: 'bg-blue-50 text-blue-700 border-blue-200',          label: '● Currently In Office' },
-    absent:      { cls: 'bg-red-50 text-red-600 border-red-200',             label: '✗ Absent' },
-    missing_out: { cls: 'bg-orange-50 text-orange-700 border-orange-200',    label: '⚠ Missing Out Punch' },
-    incomplete:  { cls: 'bg-yellow-50 text-yellow-700 border-yellow-200',    label: '◑ Incomplete Session' },
+  // Status config
+  const statusCfg = {
+    checked_out: { cls:'badge-green',  label:'Checked Out',     dot:'dot-green'  },
+    in_office:   { cls:'badge-blue',   label:'In Office',       dot:'dot-blue'   },
+    absent:      { cls:'badge-red',    label:'Absent',          dot:'dot-red'    },
+    missing_out: { cls:'badge-orange', label:'Missing Out',     dot:''           },
+    incomplete:  { cls:'badge-gray',   label:'Incomplete',      dot:'dot-gray'   },
   };
-  const ss = statusStyles[sum.status] ?? { cls: 'bg-slate-50 text-slate-600 border-slate-200', label: sum.status };
+  const sc = statusCfg[sum?.status] ?? { cls:'badge-gray', label: sum?.status??'—', dot:'dot-gray' };
 
-  // Session cards
-  const sessionHtml = sessions.length ? sessions.map(s => `
-    <div class="bg-slate-50 rounded-xl p-3 border border-slate-100">
-      <div class="flex items-center justify-between mb-2">
-        <span class="text-xs font-bold text-slate-500 uppercase tracking-wide">Session ${s.index}</span>
-        ${s.admin_note ? `<span class="text-xs text-violet-600 font-medium">Edited</span>` : ''}
-      </div>
-      <div class="flex items-center gap-2 text-sm">
-        <div class="flex items-center gap-1.5">
-          <span class="size-2.5 rounded-full bg-emerald-500 flex-shrink-0"></span>
-          <span class="font-semibold text-slate-800">${s.check_in ?? '--'}</span>
+  // Session cards HTML
+  const sessionCards = sessions.length
+    ? sessions.map(s => `
+      <div class="session-card" style="margin-bottom:8px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <span style="font-size:11px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.05em;">Session ${s.index}</span>
+          ${s.admin_note ? `<span style="font-size:11px;color:#7C3AED;font-weight:600;">Corrected</span>` : ''}
         </div>
-        <span class="text-slate-300 font-bold">→</span>
-        <div class="flex items-center gap-1.5">
-          <span class="size-2.5 rounded-full ${s.check_out ? 'bg-red-400' : 'bg-slate-300'} flex-shrink-0"></span>
-          <span class="font-semibold ${s.check_out ? 'text-slate-800' : 'text-slate-400'}">${s.check_out ?? 'In Office'}</span>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="display:flex;align-items:center;gap:5px;">
+            <span class="dot dot-green"></span>
+            <span style="font-size:13px;font-weight:700;color:#0F172A;">${s.check_in??'—'}</span>
+          </div>
+          <svg width="14" height="14" fill="none" stroke="#CBD5E1" stroke-width="2" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          <div style="display:flex;align-items:center;gap:5px;">
+            <span class="dot ${s.check_out?'dot-red':'dot-gray'}"></span>
+            <span style="font-size:13px;font-weight:700;color:${s.check_out?'#0F172A':'#94A3B8'};">${s.check_out??'In Office'}</span>
+          </div>
         </div>
-      </div>
-      ${s.duration ? `<div class="text-xs text-slate-400 mt-1.5 font-medium">${s.duration}</div>` : ''}
-    </div>
-  `).join('') : `<div class="text-xs text-slate-400 text-center py-2">No paired sessions yet</div>`;
+        ${s.duration ? `<div style="font-size:12px;color:#64748B;font-weight:500;margin-top:5px;">⏱ ${s.duration}</div>` : ''}
+      </div>`)
+    .join('')
+    : `<div style="font-size:12.5px;color:#94A3B8;text-align:center;padding:8px 0;">No sessions paired yet</div>`;
 
-  // Raw events timeline — separate visible vs duplicate
-  const visibleEvents = data.events.filter(e => !e.is_duplicate);
-  const dupEvents     = data.events.filter(e => e.is_duplicate);
-  const dupCount      = dupEvents.length;
-
-  const eventTypeStyle = {
-    check_in:  { dot: 'bg-emerald-500', text: 'text-emerald-700', label: 'CHECK-IN' },
-    check_out: { dot: 'bg-red-400',     text: 'text-red-600',     label: 'CHECK-OUT' },
-    duplicate: { dot: 'bg-amber-400',   text: 'text-amber-600',   label: 'DUPLICATE' },
-    unknown:   { dot: 'bg-slate-300',   text: 'text-slate-500',   label: 'SCAN' },
+  // Event rows
+  const evStyles = {
+    check_in:  { color:'#059669', dot:'dot-green', label:'CHECK-IN'  },
+    check_out: { color:'#DC2626', dot:'dot-red',   label:'CHECK-OUT' },
+    duplicate: { color:'#D97706', dot:'dot-amber', label:'DUPLICATE' },
+    unknown:   { color:'#64748B', dot:'dot-gray',  label:'SCAN'      },
   };
 
-  const buildEventRow = (ev) => {
-    const st = eventTypeStyle[ev.type] ?? eventTypeStyle.unknown;
+  const buildEv = ev => {
+    const s = evStyles[ev.type] ?? evStyles.unknown;
     return `
-    <div class="flex items-start gap-3 py-2">
-      <div class="flex flex-col items-center flex-shrink-0 mt-1">
-        <span class="size-2.5 rounded-full ${st.dot}"></span>
-        <span class="w-px flex-1 bg-slate-100 mt-1" style="min-height:14px"></span>
+    <div style="display:flex;align-items:flex-start;gap:10px;padding:6px 0;">
+      <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;padding-top:4px;">
+        <span class="dot ${s.dot}"></span>
+        <span class="tl-connector"></span>
       </div>
-      <div class="flex-1 pb-1">
-        <div class="flex items-center justify-between">
-          <span class="text-xs font-bold ${st.text}">${st.label}</span>
-          <span class="text-xs text-slate-400">${ev.verify_label ?? ''}</span>
+      <div style="flex:1;padding-bottom:2px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-size:11px;font-weight:700;color:${s.color};letter-spacing:.04em;">${s.label}</span>
+          ${ev.verify_label ? `<span style="font-size:11px;color:#CBD5E1;">${ev.verify_label}</span>` : ''}
         </div>
-        <div class="text-sm font-semibold text-slate-700 mt-0.5">${ev.time}</div>
+        <div style="font-size:13.5px;font-weight:600;color:#0F172A;margin-top:1px;">${ev.time}</div>
       </div>
     </div>`;
   };
 
-  const dupSection = dupCount > 0 ? `
-    <div class="mt-1">
-      <button onclick="this.nextElementSibling.classList.toggle('hidden'); this.querySelector('span').textContent = this.nextElementSibling.classList.contains('hidden') ? 'Show' : 'Hide';"
-        class="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1">
-        <span>Show</span> ${dupCount} duplicate scan${dupCount > 1 ? 's' : ''} hidden
+  const visEvs = events.filter(e => !e.is_duplicate);
+  const dupEvs = events.filter(e => e.is_duplicate);
+  const dupBtn = dupEvs.length ? `
+    <div style="margin-top:4px;">
+      <button onclick="toggleDups(this)" style="font-size:11.5px;color:#94A3B8;background:none;border:none;cursor:pointer;padding:4px 0;font-family:inherit;">
+        + ${dupEvs.length} duplicate scan${dupEvs.length>1?'s':''} hidden
       </button>
-      <div class="hidden mt-1 pl-1 border-l-2 border-amber-100">
-        ${dupEvents.map(buildEventRow).join('')}
+      <div class="dup-events" style="display:none;border-left:2px solid #FEF3C7;padding-left:8px;margin-top:4px;">
+        ${dupEvs.map(buildEv).join('')}
       </div>
     </div>` : '';
 
   el.innerHTML = `
-  {{-- Employee header --}}
-  <div class="flex items-center gap-3 mb-4 pb-4 border-b border-slate-100">
-    <div class="size-11 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0" style="background:${emp.color}">${emp.initials}</div>
-    <div class="flex-1 min-w-0">
-      <div class="font-bold text-slate-800 truncate">${emp.name}</div>
-      <div class="text-xs text-slate-400">${emp.department}</div>
+    {{-- Profile header --}}
+    <div style="display:flex;align-items:center;gap:12px;padding-bottom:14px;border-bottom:1px solid #F1F5F9;margin-bottom:14px;">
+      <div class="avatar" style="width:42px;height:42px;font-size:14px;flex-shrink:0;background:${emp.color}">${emp.initials}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:14px;font-weight:700;color:#0F172A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${emp.name}</div>
+        <div style="font-size:12px;color:#64748B;">${emp.department}</div>
+      </div>
+      <span class="badge ${sc.cls}" style="flex-shrink:0;font-size:11px;">
+        ${sc.dot ? `<span class="dot ${sc.dot}"></span>` : ''}${sc.label}
+      </span>
     </div>
-    <span class="text-xs font-semibold px-2.5 py-1 rounded-full border ${ss.cls} whitespace-nowrap flex-shrink-0">${ss.label}</span>
-  </div>
 
-  {{-- Summary row --}}
-  <div class="grid grid-cols-3 gap-2 mb-4 text-xs text-center">
-    <div class="bg-slate-50 rounded-xl p-2.5">
-      <div class="text-slate-400">First In</div>
-      <div class="font-bold text-emerald-600 mt-0.5">${sum.first_in ?? '--'}</div>
+    {{-- Summary strip --}}
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px;">
+      <div style="background:#F8FAFC;border:1px solid #E5E7EB;border-radius:9px;padding:10px;text-align:center;">
+        <div style="font-size:10.5px;color:#94A3B8;font-weight:500;margin-bottom:4px;">First In</div>
+        <div style="font-size:13px;font-weight:700;color:#059669;">${sum?.first_in??'—'}</div>
+      </div>
+      <div style="background:#F8FAFC;border:1px solid #E5E7EB;border-radius:9px;padding:10px;text-align:center;">
+        <div style="font-size:10.5px;color:#94A3B8;font-weight:500;margin-bottom:4px;">Last Out</div>
+        <div style="font-size:13px;font-weight:700;color:#DC2626;">${sum?.last_out??'—'}</div>
+      </div>
+      <div style="background:#F8FAFC;border:1px solid #E5E7EB;border-radius:9px;padding:10px;text-align:center;">
+        <div style="font-size:10.5px;color:#94A3B8;font-weight:500;margin-bottom:4px;">Hours</div>
+        <div style="font-size:13px;font-weight:700;color:#0F172A;">${sum?.working_hours??'—'}</div>
+      </div>
     </div>
-    <div class="bg-slate-50 rounded-xl p-2.5">
-      <div class="text-slate-400">Last Out</div>
-      <div class="font-bold text-rose-500 mt-0.5">${sum.last_out ?? '--'}</div>
-    </div>
-    <div class="bg-slate-50 rounded-xl p-2.5">
-      <div class="text-slate-400">Hours</div>
-      <div class="font-bold text-slate-800 mt-0.5">${sum.working_hours ?? '--'}</div>
-    </div>
-  </div>
 
-  {{-- Sessions --}}
-  <div class="mb-4">
-    <div class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">Today's Sessions</div>
-    <div class="space-y-2">${sessionHtml}</div>
-  </div>
-
-  {{-- Raw Events Timeline --}}
-  <div>
-    <div class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">Raw Events</div>
-    <div class="pl-1">
-      ${visibleEvents.map(buildEventRow).join('')}
-      ${dupSection}
+    {{-- Sessions --}}
+    <div style="margin-bottom:16px;">
+      <div class="section-label">Sessions</div>
+      ${sessionCards}
     </div>
-  </div>`;
+
+    {{-- Raw events --}}
+    <div>
+      <div class="section-label">Raw Events</div>
+      <div style="padding-left:2px;">
+        ${visEvs.map(buildEv).join('')}
+        ${dupBtn}
+      </div>
+    </div>`;
 }
 
-// ── Stats ─────────────────────────────────────────────────────────────────────
+function toggleDups(btn) {
+  const panel = btn.nextElementSibling;
+  const hidden = panel.style.display === 'none';
+  panel.style.display = hidden ? 'block' : 'none';
+  const n = panel.querySelectorAll('.tl-connector').length;
+  btn.textContent = hidden
+    ? `− ${n} duplicate scan${n>1?'s':''} visible`
+    : `+ ${n} duplicate scan${n>1?'s':''} hidden`;
+}
+
+// ═══════════════════ STATS ═══════════════════
 async function loadStats() {
   try {
     const res  = await fetch(`/api/attendance/stats?date=${currentDate}`);
@@ -547,49 +618,44 @@ async function loadStats() {
   } catch(e) {}
 }
 
-// ── Sync Status ───────────────────────────────────────────────────────────────
+// ═══════════════════ SYNC STATUS ═══════════════════
 async function loadSyncStatus() {
   try {
     const res  = await fetch('/api/sync/status');
     const data = await res.json();
-
-    document.getElementById('sync-unsynced').textContent = data.total_unsynced;
-
-    const devices = data.devices;
-    if (devices.length) {
-      const d = devices[0];
-      document.getElementById('sync-last-time').textContent = d.last_activity_ts ?? '—';
-      document.getElementById('sidebar-sync-status').innerHTML = devices.map(dv => `
-        <div class="flex items-center justify-between">
-          <span class="truncate">${dv.serial_number}</span>
-          <span class="flex items-center gap-1 text-[10px] ${dv.is_online?'text-emerald-400':'text-slate-500'}">
-            <span class="size-1.5 rounded-full ${dv.is_online?'bg-emerald-400 pulse-dot':'bg-slate-500'}"></span>
-            ${dv.is_online?'Active':'Offline'}
+    const el   = document.getElementById('sidebar-sync-status');
+    if (data.devices?.length) {
+      el.innerHTML = data.devices.map(d => `
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+          <span style="font-size:12px;color:#0F172A;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px;">${d.name||d.serial_number}</span>
+          <span style="display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:${d.is_online?'#059669':'#94A3B8'};">
+            <span class="dot ${d.is_online?'dot-green pulse':'dot-gray'}"></span>
+            ${d.is_online?'Online':'Offline'}
           </span>
         </div>
-        <div class="text-[10px] text-slate-500">Synced: ${dv.last_activity}</div>
-      `).join('');
+        <div style="font-size:11px;color:#94A3B8;margin-bottom:6px;">${d.last_activity}</div>`).join('');
+    } else {
+      el.innerHTML = '<div style="font-size:12px;color:#94A3B8;">No devices registered</div>';
     }
   } catch(e) {}
 }
 
-// ── Filters ───────────────────────────────────────────────────────────────────
+// ═══════════════════ FILTERS ═══════════════════
 function applyFilters() {
   currentDate   = document.getElementById('date-filter').value;
   currentDept   = document.getElementById('dept-filter').value;
   currentDevice = document.getElementById('device-filter').value;
   currentSearch = document.getElementById('search-input').value;
-  loadGrid(1);
-  loadStats();
+  loadGrid(1); loadStats();
 }
 
 function resetFilters() {
-  document.getElementById('date-filter').value  = '{{ today()->toDateString() }}';
-  document.getElementById('dept-filter').value  = '';
+  const today = '{{ today()->toDateString() }}';
+  document.getElementById('date-filter').value   = today;
+  document.getElementById('dept-filter').value   = '';
   document.getElementById('device-filter').value = '';
   document.getElementById('search-input').value  = '';
-  currentDate = '{{ today()->toDateString() }}';
-  currentDept = ''; currentDevice = ''; currentSearch = '';
+  currentDate = today; currentDept = ''; currentDevice = ''; currentSearch = '';
   loadGrid(1); loadStats();
 }
 
@@ -600,40 +666,33 @@ document.getElementById('date-filter').addEventListener('change', () => {
 document.getElementById('search-input').addEventListener('input', debounce(() => {
   currentSearch = document.getElementById('search-input').value;
   loadGrid(1);
-}, 400));
+}, 380));
 
 function debounce(fn, ms) {
-  let t;
-  return (...args) => { clearTimeout(t); t = setTimeout(() => fn.apply(this, args), ms); };
+  let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
 }
 
 function exportExcel() {
-  const params = new URLSearchParams({ date: currentDate, department: currentDept, format: 'csv' });
-  alert('Export feature: download from /api/attendance/export?' + params.toString());
+  alert('Export: /api/attendance/export?date=' + currentDate);
 }
 
-// ── Sidebar nav ───────────────────────────────────────────────────────────────
-function setPage(id) {
-  document.querySelectorAll('.sidebar-nav').forEach(el => {
-    el.classList.remove('bg-blue-600', 'text-white');
-    el.classList.add('text-slate-400');
-  });
-  const btn = document.getElementById(id);
-  if (btn) { btn.classList.add('bg-blue-600', 'text-white'); btn.classList.remove('text-slate-400'); }
+// ═══════════════════ SIDEBAR NAV ═══════════════════
+function setNav(id) {
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  document.getElementById(id)?.classList.add('active');
 }
 
-// ── Countdown ─────────────────────────────────────────────────────────────────
+// ═══════════════════ COUNTDOWN ═══════════════════
 function startCountdown() {
   countdownSecs = 5;
   const el = document.getElementById('countdown');
-  const interval = setInterval(() => {
+  const iv = setInterval(() => {
     countdownSecs--;
+    el.textContent = '0:0' + countdownSecs;
     if (countdownSecs <= 0) {
-      clearInterval(interval);
+      clearInterval(iv);
       refreshAll();
       startCountdown();
-    } else {
-      el.textContent = '00:00:0' + countdownSecs;
     }
   }, 1000);
 }
@@ -644,7 +703,7 @@ function refreshAll() {
   loadSyncStatus();
 }
 
-// ── Init ──────────────────────────────────────────────────────────────────────
+// ═══════════════════ INIT ═══════════════════
 loadGrid(1);
 loadStats();
 loadSyncStatus();
