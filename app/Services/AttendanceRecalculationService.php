@@ -8,6 +8,9 @@ use Carbon\Carbon;
 
 class AttendanceRecalculationService
 {
+    // Punches within this many seconds of the previous punch are duplicates.
+    private const DEDUP_SECONDS = 90;
+
     public function recalculate(string $employeeCode, string $date): void
     {
         AttendanceSession::where('employee_code', $employeeCode)
@@ -38,15 +41,42 @@ class AttendanceRecalculationService
     {
         if ($punches->isEmpty()) return;
 
-        $index   = 0;
-        $checkIn = null;
+        // Step 1 — deduplicate: mark punches within DEDUP_SECONDS of previous as skipped.
+        $deduped   = [];
+        $skipped   = [];
+        $prevTime  = null;
 
         foreach ($punches as $punch) {
-            if ($checkIn === null) {
-                $checkIn = $punch->punch_time;
+            $t = Carbon::parse($punch->punch_time);
+            if ($prevTime && $t->diffInSeconds($prevTime) <= self::DEDUP_SECONDS) {
+                $skipped[] = $punch->id;
             } else {
-                $checkOut = $punch->punch_time;
-                $mins     = Carbon::parse($checkIn)->diffInMinutes($checkOut);
+                $deduped[] = $punch;
+                $prevTime  = $t;
+            }
+        }
+
+        // Mark skipped punches in DB
+        if (!empty($skipped)) {
+            BiometricAttendance::whereIn('id', $skipped)
+                ->update(['event_type' => 'skipped']);
+        }
+
+        // Step 2 — alternate pairing: 1st=check_in, 2nd=check_out, 3rd=check_in …
+        $index   = 0;
+        $checkIn = null;
+        $checkInId = null;
+
+        foreach ($deduped as $punch) {
+            if ($checkIn === null) {
+                $checkIn   = $punch->punch_time;
+                $checkInId = $punch->id;
+                BiometricAttendance::where('id', $punch->id)->update(['event_type' => 'check_in']);
+            } else {
+                $checkOut   = $punch->punch_time;
+                $mins       = Carbon::parse($checkIn)->diffInMinutes($checkOut);
+
+                BiometricAttendance::where('id', $punch->id)->update(['event_type' => 'check_out']);
 
                 AttendanceSession::create([
                     'employee_code'    => $code,
@@ -59,10 +89,12 @@ class AttendanceRecalculationService
                     'is_overnight'     => false,
                 ]);
 
-                $checkIn = null;
+                $checkIn   = null;
+                $checkInId = null;
             }
         }
 
+        // Unpaired last punch — still inside
         if ($checkIn !== null) {
             AttendanceSession::create([
                 'employee_code' => $code,

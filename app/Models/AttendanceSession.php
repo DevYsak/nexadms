@@ -26,21 +26,27 @@ class AttendanceSession extends Model
             ->get()
             ->groupBy('employee_code')
             ->map(function ($sessions) {
-                $first = $sessions->sortBy('session_index')->first();
-                $last  = $sessions->sortByDesc('session_index')->first();
-                $totalMins = $sessions->sum('duration_minutes');
+                $sorted        = $sessions->sortBy('session_index');
+                $first         = $sorted->first();
+                $lastCompleted = $sorted->filter(fn ($s) => $s->check_out_at !== null)->last();
+                $openSession   = $sorted->filter(fn ($s) => $s->check_out_at === null)->first();
+                $totalMins     = $sessions->sum('duration_minutes');
 
-                $status = 'absent';
-                if ($first->check_in_at && $last->check_out_at) {
-                    $status = 'present';
-                } elseif ($first->check_in_at) {
+                // Status: in_office only when the LAST session is still open.
+                // If the last session is completed → employee has checked out.
+                $lastSession = $sorted->last();
+                if ($lastSession->check_out_at !== null) {
+                    $status = 'checked_out';
+                } elseif ($lastSession->check_in_at !== null) {
                     $status = 'in_office';
+                } else {
+                    $status = 'absent';
                 }
 
                 return [
-                    'first_in'      => $first->check_in_at?->format('H:i:s'),
-                    'last_out'      => $last->check_out_at?->format('H:i:s'),
-                    'working_hours' => $totalMins ? sprintf('%02dh %02dm', intdiv($totalMins, 60), $totalMins % 60) : null,
+                    'first_in'      => $first->check_in_at?->format('h:i A'),
+                    'last_out'      => $lastCompleted?->check_out_at?->format('h:i A'),
+                    'working_hours' => $totalMins ? sprintf('%dh %02dm', intdiv($totalMins, 60), $totalMins % 60) : null,
                     'status'        => $status,
                 ];
             })

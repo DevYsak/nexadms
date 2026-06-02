@@ -332,14 +332,13 @@ let countdownSecs = 5;
 // ═══════════════════ HELPERS ═══════════════════
 const statusBadge = s => {
   const m = {
-    present:     '<span class="badge badge-green"><span class="dot dot-green"></span>Checked Out</span>',
-    checked_out: '<span class="badge badge-green"><span class="dot dot-green"></span>Checked Out</span>',
-    in_office:   '<span class="badge badge-blue"><span class="dot dot-blue"></span>In Office</span>',
-    late:        '<span class="badge badge-amber"><span class="dot dot-amber"></span>Late</span>',
-    absent:      '<span class="badge badge-red"><span class="dot dot-red"></span>Absent</span>',
-    missing_out: '<span class="badge badge-orange">⚠ Missing Out</span>',
-    missing_in:  '<span class="badge badge-orange">⚠ Missing In</span>',
-    incomplete:  '<span class="badge badge-gray">Incomplete</span>',
+    checked_out:   '<span class="badge badge-green"><span class="dot dot-green"></span>Checked Out</span>',
+    present:       '<span class="badge badge-green"><span class="dot dot-green"></span>Checked Out</span>',
+    in_office:     '<span class="badge badge-blue"><span class="dot dot-blue pulse"></span>In Office</span>',
+    late:          '<span class="badge badge-amber"><span class="dot dot-amber"></span>Late</span>',
+    no_attendance: '<span class="badge badge-gray">No Attendance</span>',
+    absent:        '<span class="badge badge-red"><span class="dot dot-red"></span>Absent</span>',
+    missing_out:   '<span class="badge badge-orange">Missing Check-Out</span>',
   };
   return m[s] || '<span class="badge badge-gray">—</span>';
 };
@@ -464,133 +463,118 @@ function renderTimeline(data, el) {
   const events   = data.events   ?? [];
   const sum      = data.summary;
 
-  if (!events.length) {
-    el.innerHTML = `
-      <div style="display:flex;align-items:center;gap:10px;padding-bottom:14px;border-bottom:1px solid #F1F5F9;margin-bottom:14px;">
-        <div class="avatar" style="width:40px;height:40px;font-size:13px;background:${emp?.color??'#6366f1'}">${emp?.initials??'?'}</div>
-        <div>
-          <div style="font-size:14px;font-weight:700;color:#0F172A;">${emp?.name??'Employee'}</div>
-          <div style="font-size:12px;color:#94A3B8;">${emp?.department??'—'}</div>
-        </div>
+  const empHeader = `
+    <div style="display:flex;align-items:center;gap:12px;padding-bottom:14px;border-bottom:1px solid #F1F5F9;margin-bottom:14px;">
+      <div class="avatar" style="width:42px;height:42px;font-size:14px;flex-shrink:0;background:${emp?.color??'#6366f1'}">${emp?.initials??'?'}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:14px;font-weight:700;color:#0F172A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${emp?.name??'Employee'}</div>
+        <div style="font-size:12px;color:#64748B;">${emp?.department??'—'}</div>
       </div>
-      <div style="text-align:center;padding:32px 0;color:#94A3B8;font-size:13px;">No attendance recorded.</div>`;
+    </div>`;
+
+  if (!events.length && !sessions.length) {
+    el.innerHTML = empHeader + `<div style="text-align:center;padding:32px 0;color:#94A3B8;font-size:13px;">No attendance recorded for this date.</div>`;
     return;
   }
 
-  // Status config
+  // Status
   const statusCfg = {
-    checked_out: { cls:'badge-green',  label:'Checked Out',     dot:'dot-green'  },
-    in_office:   { cls:'badge-blue',   label:'In Office',       dot:'dot-blue'   },
-    absent:      { cls:'badge-red',    label:'Absent',          dot:'dot-red'    },
-    missing_out: { cls:'badge-orange', label:'Missing Out',     dot:''           },
-    incomplete:  { cls:'badge-gray',   label:'Incomplete',      dot:'dot-gray'   },
+    checked_out:   { bg:'#ECFDF5', color:'#059669', dot:'dot-green',  label:'Checked Out'   },
+    in_office:     { bg:'#EFF6FF', color:'#2563EB', dot:'dot-blue',   label:'In Office'     },
+    no_attendance: { bg:'#F8FAFC', color:'#94A3B8', dot:'dot-gray',   label:'No Attendance' },
+    absent:        { bg:'#FEF2F2', color:'#DC2626', dot:'dot-red',    label:'Absent'        },
   };
-  const sc = statusCfg[sum?.status] ?? { cls:'badge-gray', label: sum?.status??'—', dot:'dot-gray' };
+  const sc = statusCfg[sum?.status] ?? statusCfg.no_attendance;
 
-  // Session cards HTML
-  const sessionCards = sessions.length
-    ? sessions.map(s => `
-      <div class="session-card" style="margin-bottom:8px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-          <span style="font-size:11px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.05em;">Session ${s.index}</span>
-          ${s.admin_note ? `<span style="font-size:11px;color:#7C3AED;font-weight:600;">Corrected</span>` : ''}
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <div style="display:flex;align-items:center;gap:5px;">
-            <span class="dot dot-green"></span>
-            <span style="font-size:13px;font-weight:700;color:#0F172A;">${s.check_in??'—'}</span>
-          </div>
-          <svg width="14" height="14" fill="none" stroke="#CBD5E1" stroke-width="2" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-          <div style="display:flex;align-items:center;gap:5px;">
-            <span class="dot ${s.check_out?'dot-red':'dot-gray'}"></span>
-            <span style="font-size:13px;font-weight:700;color:${s.check_out?'#0F172A':'#94A3B8'};">${s.check_out??'In Office'}</span>
-          </div>
-        </div>
-        ${s.duration ? `<div style="font-size:12px;color:#64748B;font-weight:500;margin-top:5px;">⏱ ${s.duration}</div>` : ''}
-      </div>`)
-    .join('')
-    : `<div style="font-size:12.5px;color:#94A3B8;text-align:center;padding:8px 0;">No sessions paired yet</div>`;
-
-  // Event rows
-  const evStyles = {
-    check_in:  { color:'#059669', dot:'dot-green', label:'CHECK-IN'  },
-    check_out: { color:'#DC2626', dot:'dot-red',   label:'CHECK-OUT' },
-    duplicate: { color:'#D97706', dot:'dot-amber', label:'DUPLICATE' },
-    unknown:   { color:'#64748B', dot:'dot-gray',  label:'SCAN'      },
-  };
-
-  const buildEv = ev => {
-    const s = evStyles[ev.type] ?? evStyles.unknown;
-    return `
-    <div style="display:flex;align-items:flex-start;gap:10px;padding:6px 0;">
-      <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;padding-top:4px;">
-        <span class="dot ${s.dot}"></span>
-        <span class="tl-connector"></span>
+  // Check-in / Check-out prominent display
+  const hasOut = !!sum?.last_out;
+  const bigCards = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
+      <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:10px;padding:12px;">
+        <div style="font-size:10.5px;font-weight:700;color:#059669;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">↑ First Check-In</div>
+        <div style="font-size:18px;font-weight:800;color:#0F172A;line-height:1;">${sum?.first_in??'—'}</div>
       </div>
-      <div style="flex:1;padding-bottom:2px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;">
-          <span style="font-size:11px;font-weight:700;color:${s.color};letter-spacing:.04em;">${s.label}</span>
-          ${ev.verify_label ? `<span style="font-size:11px;color:#CBD5E1;">${ev.verify_label}</span>` : ''}
-        </div>
-        <div style="font-size:13.5px;font-weight:600;color:#0F172A;margin-top:1px;">${ev.time}</div>
+      <div style="background:${hasOut?'#FFF1F2':'#F8FAFC'};border:1px solid ${hasOut?'#FECDD3':'#E5E7EB'};border-radius:10px;padding:12px;">
+        <div style="font-size:10.5px;font-weight:700;color:${hasOut?'#DC2626':'#94A3B8'};text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">↓ Last Check-Out</div>
+        <div style="font-size:18px;font-weight:800;color:${hasOut?'#0F172A':'#CBD5E1'};line-height:1;">${sum?.last_out??'Still Inside'}</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px;">
+      <div style="background:#F8FAFC;border:1px solid #E5E7EB;border-radius:9px;padding:10px;text-align:center;">
+        <div style="font-size:10px;color:#94A3B8;font-weight:600;margin-bottom:4px;">HOURS</div>
+        <div style="font-size:15px;font-weight:800;color:#0F172A;">${sum?.working_hours??'—'}</div>
+      </div>
+      <div style="background:#F8FAFC;border:1px solid #E5E7EB;border-radius:9px;padding:10px;text-align:center;">
+        <div style="font-size:10px;color:#94A3B8;font-weight:600;margin-bottom:4px;">SESSIONS</div>
+        <div style="font-size:15px;font-weight:800;color:#0F172A;">${sum?.total_sessions??0}</div>
+      </div>
+      <div style="background:${sc.bg};border:1px solid #E5E7EB;border-radius:9px;padding:10px;text-align:center;">
+        <div style="font-size:10px;color:#94A3B8;font-weight:600;margin-bottom:4px;">STATUS</div>
+        <div style="font-size:12px;font-weight:700;color:${sc.color};">${sc.label}</div>
       </div>
     </div>`;
+
+  // Session cards
+  const sessionCards = sessions.length ? `
+    <div style="margin-bottom:16px;">
+      <div class="section-label">Today's Sessions</div>
+      ${sessions.map(s => `
+        <div class="session-card" style="margin-bottom:8px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <span style="font-size:11px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.05em;">Session ${s.index}</span>
+            ${s.admin_note ? `<span style="font-size:11px;color:#7C3AED;font-weight:600;">Corrected</span>` : ''}
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <div style="display:flex;align-items:center;gap:5px;">
+              <span class="dot dot-green"></span>
+              <span style="font-size:13.5px;font-weight:700;color:#0F172A;">${s.check_in??'—'}</span>
+            </div>
+            <span style="color:#CBD5E1;font-size:16px;">→</span>
+            <div style="display:flex;align-items:center;gap:5px;">
+              <span class="dot ${s.check_out?'dot-red':'dot-gray'}"></span>
+              <span style="font-size:13.5px;font-weight:700;color:${s.check_out?'#0F172A':'#94A3B8'};">${s.check_out??'In Office'}</span>
+            </div>
+            ${s.duration ? `<span style="font-size:11.5px;color:#64748B;font-weight:500;margin-left:auto;">${s.duration}</span>` : ''}
+          </div>
+        </div>`).join('')}
+    </div>` : '';
+
+  // Timeline events (CHECK-IN / CHECK-OUT only — no SCAN noise)
+  const evStyles = {
+    check_in:  { color:'#059669', bg:'#ECFDF5', border:'#BBF7D0', label:'CHECK-IN'  },
+    check_out: { color:'#DC2626', bg:'#FEF2F2', border:'#FECDD3', label:'CHECK-OUT' },
+    duplicate: { color:'#D97706', bg:'#FFFBEB', border:'#FDE68A', label:'DUPLICATE' },
   };
 
   const visEvs = events.filter(e => !e.is_duplicate);
   const dupEvs = events.filter(e => e.is_duplicate);
-  const dupBtn = dupEvs.length ? `
-    <div style="margin-top:4px;">
-      <button onclick="toggleDups(this)" style="font-size:11.5px;color:#94A3B8;background:none;border:none;cursor:pointer;padding:4px 0;font-family:inherit;">
-        + ${dupEvs.length} duplicate scan${dupEvs.length>1?'s':''} hidden
-      </button>
-      <div class="dup-events" style="display:none;border-left:2px solid #FEF3C7;padding-left:8px;margin-top:4px;">
-        ${dupEvs.map(buildEv).join('')}
+
+  const buildEv = ev => {
+    const s = evStyles[ev.type] ?? { color:'#94A3B8', bg:'#F8FAFC', border:'#E5E7EB', label:'SCAN' };
+    return `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #F8FAFC;">
+      <div style="width:8px;height:8px;border-radius:50%;background:${s.color};flex-shrink:0;"></div>
+      <div style="display:inline-flex;align-items:center;gap:6px;background:${s.bg};border:1px solid ${s.border};border-radius:6px;padding:3px 10px;">
+        <span style="font-size:11px;font-weight:700;color:${s.color};letter-spacing:.04em;">${s.label}</span>
       </div>
+      <span style="font-size:13.5px;font-weight:700;color:#0F172A;margin-left:auto;">${ev.time}</span>
+    </div>`;
+  };
+
+  const dupSection = dupEvs.length ? `
+    <button onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none';this.textContent=this.textContent.startsWith('+')?'− Hide':'+ ${dupEvs.length} duplicate scan${dupEvs.length>1?'s':''} hidden';"
+      style="font-size:11.5px;color:#94A3B8;background:none;border:none;cursor:pointer;padding:6px 0;font-family:inherit;width:100%;text-align:left;">
+      + ${dupEvs.length} duplicate scan${dupEvs.length>1?'s':''} hidden
+    </button>
+    <div style="display:none;border-left:2px solid #FEF3C7;padding-left:10px;margin-top:4px;">
+      ${dupEvs.map(buildEv).join('')}
     </div>` : '';
 
-  el.innerHTML = `
-    {{-- Profile header --}}
-    <div style="display:flex;align-items:center;gap:12px;padding-bottom:14px;border-bottom:1px solid #F1F5F9;margin-bottom:14px;">
-      <div class="avatar" style="width:42px;height:42px;font-size:14px;flex-shrink:0;background:${emp.color}">${emp.initials}</div>
-      <div style="flex:1;min-width:0;">
-        <div style="font-size:14px;font-weight:700;color:#0F172A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${emp.name}</div>
-        <div style="font-size:12px;color:#64748B;">${emp.department}</div>
-      </div>
-      <span class="badge ${sc.cls}" style="flex-shrink:0;font-size:11px;">
-        ${sc.dot ? `<span class="dot ${sc.dot}"></span>` : ''}${sc.label}
-      </span>
-    </div>
-
-    {{-- Summary strip --}}
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px;">
-      <div style="background:#F8FAFC;border:1px solid #E5E7EB;border-radius:9px;padding:10px;text-align:center;">
-        <div style="font-size:10.5px;color:#94A3B8;font-weight:500;margin-bottom:4px;">First In</div>
-        <div style="font-size:13px;font-weight:700;color:#059669;">${sum?.first_in??'—'}</div>
-      </div>
-      <div style="background:#F8FAFC;border:1px solid #E5E7EB;border-radius:9px;padding:10px;text-align:center;">
-        <div style="font-size:10.5px;color:#94A3B8;font-weight:500;margin-bottom:4px;">Last Out</div>
-        <div style="font-size:13px;font-weight:700;color:#DC2626;">${sum?.last_out??'—'}</div>
-      </div>
-      <div style="background:#F8FAFC;border:1px solid #E5E7EB;border-radius:9px;padding:10px;text-align:center;">
-        <div style="font-size:10.5px;color:#94A3B8;font-weight:500;margin-bottom:4px;">Hours</div>
-        <div style="font-size:13px;font-weight:700;color:#0F172A;">${sum?.working_hours??'—'}</div>
-      </div>
-    </div>
-
-    {{-- Sessions --}}
-    <div style="margin-bottom:16px;">
-      <div class="section-label">Sessions</div>
-      ${sessionCards}
-    </div>
-
-    {{-- Raw events --}}
+  el.innerHTML = empHeader + bigCards + sessionCards + `
     <div>
-      <div class="section-label">Raw Events</div>
-      <div style="padding-left:2px;">
-        ${visEvs.map(buildEv).join('')}
-        ${dupBtn}
-      </div>
+      <div class="section-label">Timeline</div>
+      ${visEvs.map(buildEv).join('')}
+      ${dupSection}
     </div>`;
 }
 
