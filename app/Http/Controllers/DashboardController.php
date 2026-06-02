@@ -203,31 +203,65 @@ class DashboardController extends Controller
             ->orderBy('session_index')
             ->get();
 
-        // Build clean event list from sessions — no device noise, no raw scans
+        // Index punches by their time string for verify_label lookup
+        $punchByTime = $allPunches->keyBy(fn ($p) => Carbon::parse($p->punch_time)->format('H:i:s'));
+
+        // Build clean events from sessions — include verify_label for timeline display
         $events = [];
         foreach ($sessions as $s) {
             if ($s->check_in_at) {
-                $events[] = ['type' => 'check_in',  'time' => $s->check_in_at->format('h:i A'),  'time_full' => $s->check_in_at->format('h:i:s A'),  'is_duplicate' => false];
+                $p = $punchByTime->get($s->check_in_at->format('H:i:s'));
+                $events[] = [
+                    'type'         => 'check_in',
+                    'time'         => $s->check_in_at->format('h:i A'),
+                    'verify_label' => $p?->verify_type_label,
+                    'is_duplicate' => false,
+                ];
             }
             if ($s->check_out_at) {
-                $events[] = ['type' => 'check_out', 'time' => $s->check_out_at->format('h:i A'), 'time_full' => $s->check_out_at->format('h:i:s A'), 'is_duplicate' => false];
+                $p = $punchByTime->get($s->check_out_at->format('H:i:s'));
+                $events[] = [
+                    'type'         => 'check_out',
+                    'time'         => $s->check_out_at->format('h:i A'),
+                    'verify_label' => $p?->verify_type_label,
+                    'is_duplicate' => false,
+                ];
             }
         }
 
-        // Duplicate/skipped punches — hidden by default, expandable
+        // Skipped punches — hidden by default
         foreach ($allPunches->where('event_type', 'skipped') as $p) {
             $t = Carbon::parse($p->punch_time);
-            $events[] = ['type' => 'duplicate', 'time' => $t->format('h:i A'), 'time_full' => $t->format('h:i:s A'), 'verify_label' => $p->verify_type_label, 'is_duplicate' => true];
+            $events[] = ['type' => 'duplicate', 'time' => $t->format('h:i A'), 'verify_label' => $p->verify_type_label, 'is_duplicate' => true];
         }
 
-        $sessionData = $sessions->map(fn ($s) => [
-            'index'      => $s->session_index + 1,
-            'check_in'   => $s->check_in_at?->format('h:i A'),
-            'check_out'  => $s->check_out_at?->format('h:i A'),
-            'duration'   => $s->duration_human,
-            'status'     => $s->status,
-            'admin_note' => $s->admin_note,
-        ]);
+        // Sessions with break/current durations and punch count
+        $sessArr = $sessions->values();
+        $sessionData = $sessArr->map(function ($s, $i) use ($sessArr, $allPunches) {
+            $prev      = $i > 0 ? $sessArr[$i - 1] : null;
+            $breakMins = $prev && $prev->check_out_at && $s->check_in_at
+                ? (int) $prev->check_out_at->diffInMinutes($s->check_in_at) : null;
+            $currentMins = (! $s->check_out_at && $s->check_in_at)
+                ? (int) $s->check_in_at->diffInMinutes(now()) : null;
+
+            $windowEnd  = $s->check_out_at ?? now();
+            $punchCount = $allPunches->filter(function ($p) use ($s, $windowEnd) {
+                $pt = Carbon::parse($p->punch_time);
+                return $pt->gte($s->check_in_at) && $pt->lte($windowEnd);
+            })->count();
+
+            return [
+                'index'            => $s->session_index + 1,
+                'check_in'         => $s->check_in_at?->format('h:i A'),
+                'check_out'        => $s->check_out_at?->format('h:i A'),
+                'duration'         => $s->duration_human,
+                'break_before'     => $breakMins !== null ? sprintf('%dh %02dm', intdiv($breakMins, 60), $breakMins % 60) : null,
+                'current_duration' => $currentMins !== null ? sprintf('%dh %02dm', intdiv($currentMins, 60), $currentMins % 60) : null,
+                'punch_count'      => $punchCount,
+                'status'           => $s->status,
+                'admin_note'       => $s->admin_note,
+            ];
+        });
 
         $totalMins     = $sessions->sum('duration_minutes');
         $lastCompleted = $sessions->filter(fn ($s) => $s->check_out_at)->last();
