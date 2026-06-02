@@ -7,7 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 class BiometricDevice extends Model
 {
     protected $fillable = [
-        'serial_number', 'name', 'firmware_version', 'pushver', 'last_activity_at',
+        'serial_number', 'name', 'firmware_version', 'pushver',
+        'last_activity_at', 'last_stamp', 'last_online_at', 'went_offline_at',
     ];
 
     protected $casts = [

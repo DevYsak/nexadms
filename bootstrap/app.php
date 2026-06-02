@@ -13,10 +13,11 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
         then: function () {
-            $iclockRoutes = realpath(__DIR__.'/../../biometric-attendance/routes/iclock.php');
-            if ($iclockRoutes) {
-                \Illuminate\Support\Facades\Route::group([], $iclockRoutes);
-            }
+            // Load iclock routes without web middleware (no CSRF, no sessions).
+            \Illuminate\Support\Facades\Route::group(
+                [],
+                __DIR__.'/../routes/iclock.php'
+            );
         },
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
