@@ -155,71 +155,96 @@ class DashboardController extends Controller
 
     public function timelineApi(Request $request, string $code): JsonResponse
     {
-        $date = $request->input('date', today()->toDateString());
-
+        $date     = $request->input('date', today()->toDateString());
         $employee = Employee::where('employee_code', $code)->first();
 
-        $punches = BiometricAttendance::with('device')
-            ->where('employee_code', $code)
+        $punches = BiometricAttendance::where('employee_code', $code)
             ->whereDate('punch_time', $date)
             ->orderBy('punch_time')
             ->get();
 
+        $empData = $employee ? [
+            'name'       => $employee->name,
+            'department' => $employee->department,
+            'initials'   => $employee->initials,
+            'color'      => $employee->avatar_color,
+        ] : ['name' => 'Employee ' . $code, 'department' => '-', 'initials' => substr($code, 0, 2), 'color' => '#6366f1'];
+
         if ($punches->isEmpty()) {
             return response()->json([
-                'employee'     => $employee ? ['name' => $employee->name, 'department' => $employee->department, 'initials' => $employee->initials, 'color' => $employee->avatar_color] : null,
-                'events'       => [],
-                'summary'      => null,
+                'employee' => $empData,
+                'sessions' => [],
+                'events'   => [],
+                'summary'  => null,
             ]);
         }
 
-        // Use event_type set by AttendancePairingService for accurate labelling.
-        // event_type = check_in | check_out | unknown | skipped
+        // Sessions from AttendanceSession table (computed pairings)
+        $sessions = AttendanceSession::where('employee_code', $code)
+            ->where('session_date', $date)
+            ->orderBy('session_index')
+            ->get()
+            ->map(fn ($s) => [
+                'index'        => $s->session_index + 1,
+                'check_in'     => $s->check_in_at?->format('h:i A'),
+                'check_out'    => $s->check_out_at?->format('h:i A'),
+                'duration'     => $s->duration_human,
+                'status'       => $s->status,
+                'status_label' => $s->status_label,
+                'is_overnight' => $s->is_overnight,
+                'admin_note'   => $s->admin_note,
+            ]);
+
+        // Raw events with duplicate detection
         $typeMap = [
-            'check_in'  => ['label' => 'Check-In',  'color' => '#10b981', 'icon' => 'check_in'],
-            'check_out' => ['label' => 'Check-Out', 'color' => '#ef4444', 'icon' => 'check_out'],
-            'skipped'   => ['label' => 'Duplicate', 'color' => '#94a3b8', 'icon' => 'skipped'],
-            'unknown'   => ['label' => 'Punch',     'color' => '#f59e0b', 'icon' => 'punch'],
+            'check_in'  => ['label' => 'Check-In',  'type' => 'check_in'],
+            'check_out' => ['label' => 'Check-Out', 'type' => 'check_out'],
+            'skipped'   => ['label' => 'Duplicate', 'type' => 'duplicate'],
+            'unknown'   => ['label' => 'Scan',      'type' => 'unknown'],
         ];
 
         $events = $punches->map(function ($punch) use ($typeMap) {
-            $time   = Carbon::parse($punch->punch_time);
-            $et     = $typeMap[$punch->event_type] ?? $typeMap['unknown'];
-
+            $time = Carbon::parse($punch->punch_time);
+            $et   = $typeMap[$punch->event_type] ?? $typeMap['unknown'];
             return [
-                'type'         => $punch->event_type,
+                'type'         => $et['type'],
                 'label'        => $et['label'],
-                'icon'         => $et['icon'],
-                'color'        => $et['color'],
-                'time'         => $time->format('h:i:s A'),
-                'time_raw'     => $time->toTimeString(),
+                'time'         => $time->format('h:i A'),
+                'time_full'    => $time->format('h:i:s A'),
                 'verify_label' => $punch->verify_type_label,
-                'device_sn'    => $punch->device?->serial_number ?? '-',
-                'session_id'   => $punch->session_id,
+                'is_duplicate' => in_array($punch->event_type, ['skipped']),
             ];
         });
 
-        $first = Carbon::parse($punches->first()->punch_time);
-        $last  = Carbon::parse($punches->last()->punch_time);
-        $mins  = $punches->count() > 1 ? $first->diffInMinutes($last) : null;
+        // Summary
+        $sessions_col = $sessions->collect();
+        $firstIn  = $sessions_col->first()?['check_in'] ?? Carbon::parse($punches->first()->punch_time)->format('h:i A');
+        $lastOut  = $sessions_col->last()?['check_out'] ?? null;
+        $totalMins = AttendanceSession::where('employee_code', $code)
+            ->where('session_date', $date)
+            ->sum('duration_minutes');
+
+        $dupCount = $events->where('is_duplicate', true)->count();
+
+        $status = 'in_office';
+        if ($lastOut) $status = 'checked_out';
+        elseif ($punches->isEmpty()) $status = 'absent';
 
         $summary = [
-            'first_punch'   => $first->format('h:i A'),
-            'last_punch'    => $punches->count() > 1 ? $last->format('h:i A') : null,
-            'total_punches' => $punches->count(),
-            'working_hours' => $mins !== null ? sprintf('%02dh %02dm', intdiv($mins, 60), $mins % 60) : null,
-            'status'        => $punches->count() > 1 ? 'present' : 'in_office',
+            'first_in'        => $firstIn,
+            'last_out'        => $lastOut,
+            'total_sessions'  => $sessions->count(),
+            'total_punches'   => $punches->count(),
+            'duplicate_count' => $dupCount,
+            'working_hours'   => $totalMins ? sprintf('%dh %02dm', intdiv($totalMins, 60), $totalMins % 60) : null,
+            'status'          => $status,
         ];
 
         return response()->json([
-            'employee' => $employee ? [
-                'name'       => $employee->name,
-                'department' => $employee->department,
-                'initials'   => $employee->initials,
-                'color'      => $employee->avatar_color,
-            ] : ['name' => 'Employee ' . $code, 'department' => '-', 'initials' => 'E' . $code, 'color' => '#6366f1'],
-            'events'  => $events->values(),
-            'summary' => $summary,
+            'employee' => $empData,
+            'sessions' => $sessions->values(),
+            'events'   => $events->values(),
+            'summary'  => $summary,
         ]);
     }
 

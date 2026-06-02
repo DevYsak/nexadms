@@ -191,15 +191,14 @@
                   <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide w-8">#</th>
                   <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Employee</th>
                   <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Code</th>
-                  <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Check-In</th>
-                  <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Check-Out</th>
+                  <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">First Check-In</th>
+                  <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Last Check-Out</th>
                   <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Working Hours</th>
                   <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
-                  <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Device</th>
                 </tr>
               </thead>
               <tbody id="attendance-tbody" class="divide-y divide-slate-50">
-                <tr><td colspan="8" class="px-4 py-12 text-center text-slate-400">Loading attendance data…</td></tr>
+                <tr><td colspan="7" class="px-4 py-12 text-center text-slate-400">Loading attendance data…</td></tr>
               </tbody>
             </table>
           </div>
@@ -211,21 +210,21 @@
         </div>
 
         {{-- Employee Timeline --}}
-        <div class="w-80 flex-shrink-0 bg-white rounded-2xl border border-slate-200 overflow-hidden">
-          <div class="px-4 py-4 border-b border-slate-100 flex items-center justify-between">
-            <h2 class="font-bold text-slate-800 text-sm">Employee Timeline</h2>
+        <div class="w-96 flex-shrink-0 bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col" style="max-height:680px">
+          <div class="px-4 py-4 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
+            <h2 class="font-bold text-slate-800 text-sm">Employee Detail</h2>
             <select id="timeline-emp-select" onchange="loadTimeline(this.value)"
-              class="text-xs border border-slate-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 max-w-32">
+              class="text-xs border border-slate-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 max-w-44">
               <option value="">Select employee</option>
               @foreach(\App\Models\Employee::active()->orderBy('name')->get() as $emp)
                 <option value="{{ $emp->employee_code }}">{{ $emp->name }} ({{ $emp->employee_code }})</option>
               @endforeach
             </select>
           </div>
-          <div id="timeline-content" class="px-4 py-4">
+          <div id="timeline-content" class="px-4 py-4 overflow-y-auto scrollbar-thin flex-1">
             <div class="text-center py-10 text-slate-400 text-sm">
               <svg class="size-10 mx-auto mb-2 text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-              Select an employee to view their timeline
+              Select an employee to view their detail
             </div>
           </div>
         </div>
@@ -298,10 +297,14 @@ let refreshTimer;
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const statusBadge = (status) => {
   const map = {
-    present:   '<span class="badge bg-emerald-100 text-emerald-700">Present</span>',
-    in_office: '<span class="badge bg-blue-100 text-blue-700">In Office</span>',
-    late:      '<span class="badge bg-amber-100 text-amber-700">Late</span>',
-    absent:    '<span class="badge bg-red-100 text-red-500">Absent</span>',
+    present:            '<span class="badge bg-emerald-100 text-emerald-700">✓ Checked Out</span>',
+    checked_out:        '<span class="badge bg-emerald-100 text-emerald-700">✓ Checked Out</span>',
+    in_office:          '<span class="badge bg-blue-100 text-blue-700">● In Office</span>',
+    late:               '<span class="badge bg-amber-100 text-amber-700">⏰ Late</span>',
+    absent:             '<span class="badge bg-red-100 text-red-500">✗ Absent</span>',
+    missing_out:        '<span class="badge bg-orange-100 text-orange-700">⚠ Missing Out Punch</span>',
+    missing_in:         '<span class="badge bg-orange-100 text-orange-700">⚠ Missing In Punch</span>',
+    incomplete:         '<span class="badge bg-yellow-100 text-yellow-700">◑ Incomplete</span>',
   };
   return map[status] || '<span class="badge bg-slate-100 text-slate-600">Unknown</span>';
 };
@@ -335,7 +338,7 @@ async function loadGrid(page = 1) {
 function renderGrid(data) {
   const tbody = document.getElementById('attendance-tbody');
   if (!data.rows.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-12 text-center text-slate-400 text-sm">No attendance records found.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-12 text-center text-slate-400 text-sm">No attendance records found.</td></tr>';
     document.getElementById('pagination-info').textContent = 'Showing 0 records';
     document.getElementById('pagination-controls').innerHTML = '';
     return;
@@ -354,12 +357,11 @@ function renderGrid(data) {
           </div>
         </div>
       </td>
-      <td class="px-4 py-3 text-slate-600 text-sm font-mono">${row.code}</td>
-      <td class="px-4 py-3 font-semibold text-blue-600 text-sm">${row.first_in ?? '<span class="text-slate-300">--</span>'}</td>
-      <td class="px-4 py-3 font-semibold text-rose-500 text-sm">${row.last_out ?? '<span class="text-slate-300">--</span>'}</td>
-      <td class="px-4 py-3 text-slate-700 text-sm font-medium">${row.working_hours ?? '<span class="text-slate-300">--</span>'}</td>
+      <td class="px-4 py-3 text-slate-500 text-sm font-mono">${row.code}</td>
+      <td class="px-4 py-3 font-semibold text-emerald-600 text-sm">${row.first_in ? '↗ ' + row.first_in : '<span class="text-slate-300">--</span>'}</td>
+      <td class="px-4 py-3 font-semibold text-rose-500 text-sm">${row.last_out ? '↙ ' + row.last_out : '<span class="text-slate-300">--</span>'}</td>
+      <td class="px-4 py-3 text-slate-700 text-sm font-semibold">${row.working_hours ?? '<span class="text-slate-300 font-normal">--</span>'}</td>
       <td class="px-4 py-3">${statusBadge(row.status)}</td>
-      <td class="px-4 py-3 text-slate-500 text-xs font-mono">${row.device_sn ?? '--'}</td>
     </tr>
   `).join('');
 
@@ -397,69 +399,137 @@ async function loadTimeline(code) {
 }
 
 function renderTimeline(data, el) {
-  if (!data.events.length) {
-    el.innerHTML = `<div class="text-center py-10 text-slate-400 text-sm">
-      <div class="font-semibold text-slate-600 mb-1">${data.employee?.name ?? 'Employee'}</div>
-      No punches recorded for this date.
-    </div>`;
+  const emp = data.employee;
+
+  if (!data.events || !data.events.length) {
+    el.innerHTML = `
+    <div class="flex items-center gap-3 mb-5 pb-4 border-b border-slate-100">
+      <div class="size-11 rounded-full flex items-center justify-center text-white font-bold" style="background:${emp?.color ?? '#6366f1'}">${emp?.initials ?? '?'}</div>
+      <div>
+        <div class="font-bold text-slate-800">${emp?.name ?? 'Employee'}</div>
+        <div class="text-xs text-slate-400">${emp?.department ?? '--'}</div>
+      </div>
+    </div>
+    <div class="text-center py-8 text-slate-400 text-sm">No attendance recorded for this date.</div>`;
     return;
   }
 
-  const emp = data.employee;
   const sum = data.summary;
-  const iconMap = {
-    check_in:  { bg:'bg-emerald-100', icon:'✓', text:'text-emerald-600' },
-    check_out: { bg:'bg-red-100',     icon:'→', text:'text-red-600'     },
-    punch:     { bg:'bg-amber-100',   icon:'●', text:'text-amber-600'   },
-  };
+  const sessions = data.sessions ?? [];
 
-  const events = data.events.map(ev => {
-    const ic = iconMap[ev.type] || iconMap.punch;
-    return `
-    <div class="relative pl-12 pb-5">
-      <div class="absolute left-0 size-9 ${ic.bg} rounded-full flex items-center justify-center z-10 text-sm font-bold ${ic.text}">${ic.icon}</div>
-      <div class="bg-slate-50 rounded-xl p-3">
-        <div class="font-semibold text-slate-800 text-sm">${ev.label}</div>
-        <div class="text-xs text-slate-500 mt-0.5">${ev.verify_label}</div>
-        <div class="flex items-center justify-between mt-1">
-          <span class="text-sm font-bold text-slate-700">${ev.time}</span>
-          <span class="text-xs text-slate-400 font-mono">${ev.device_sn}</span>
+  // Status label + style
+  const statusStyles = {
+    checked_out: { cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', label: '✓ Checked Out' },
+    in_office:   { cls: 'bg-blue-50 text-blue-700 border-blue-200',          label: '● Currently In Office' },
+    absent:      { cls: 'bg-red-50 text-red-600 border-red-200',             label: '✗ Absent' },
+    missing_out: { cls: 'bg-orange-50 text-orange-700 border-orange-200',    label: '⚠ Missing Out Punch' },
+    incomplete:  { cls: 'bg-yellow-50 text-yellow-700 border-yellow-200',    label: '◑ Incomplete Session' },
+  };
+  const ss = statusStyles[sum.status] ?? { cls: 'bg-slate-50 text-slate-600 border-slate-200', label: sum.status };
+
+  // Session cards
+  const sessionHtml = sessions.length ? sessions.map(s => `
+    <div class="bg-slate-50 rounded-xl p-3 border border-slate-100">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-bold text-slate-500 uppercase tracking-wide">Session ${s.index}</span>
+        ${s.admin_note ? `<span class="text-xs text-violet-600 font-medium">Edited</span>` : ''}
+      </div>
+      <div class="flex items-center gap-2 text-sm">
+        <div class="flex items-center gap-1.5">
+          <span class="size-2.5 rounded-full bg-emerald-500 flex-shrink-0"></span>
+          <span class="font-semibold text-slate-800">${s.check_in ?? '--'}</span>
+        </div>
+        <span class="text-slate-300 font-bold">→</span>
+        <div class="flex items-center gap-1.5">
+          <span class="size-2.5 rounded-full ${s.check_out ? 'bg-red-400' : 'bg-slate-300'} flex-shrink-0"></span>
+          <span class="font-semibold ${s.check_out ? 'text-slate-800' : 'text-slate-400'}">${s.check_out ?? 'In Office'}</span>
         </div>
       </div>
+      ${s.duration ? `<div class="text-xs text-slate-400 mt-1.5 font-medium">${s.duration}</div>` : ''}
+    </div>
+  `).join('') : `<div class="text-xs text-slate-400 text-center py-2">No paired sessions yet</div>`;
+
+  // Raw events timeline — separate visible vs duplicate
+  const visibleEvents = data.events.filter(e => !e.is_duplicate);
+  const dupEvents     = data.events.filter(e => e.is_duplicate);
+  const dupCount      = dupEvents.length;
+
+  const eventTypeStyle = {
+    check_in:  { dot: 'bg-emerald-500', text: 'text-emerald-700', label: 'CHECK-IN' },
+    check_out: { dot: 'bg-red-400',     text: 'text-red-600',     label: 'CHECK-OUT' },
+    duplicate: { dot: 'bg-amber-400',   text: 'text-amber-600',   label: 'DUPLICATE' },
+    unknown:   { dot: 'bg-slate-300',   text: 'text-slate-500',   label: 'SCAN' },
+  };
+
+  const buildEventRow = (ev) => {
+    const st = eventTypeStyle[ev.type] ?? eventTypeStyle.unknown;
+    return `
+    <div class="flex items-start gap-3 py-2">
+      <div class="flex flex-col items-center flex-shrink-0 mt-1">
+        <span class="size-2.5 rounded-full ${st.dot}"></span>
+        <span class="w-px flex-1 bg-slate-100 mt-1" style="min-height:14px"></span>
+      </div>
+      <div class="flex-1 pb-1">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold ${st.text}">${st.label}</span>
+          <span class="text-xs text-slate-400">${ev.verify_label ?? ''}</span>
+        </div>
+        <div class="text-sm font-semibold text-slate-700 mt-0.5">${ev.time}</div>
+      </div>
     </div>`;
-  }).join('');
+  };
+
+  const dupSection = dupCount > 0 ? `
+    <div class="mt-1">
+      <button onclick="this.nextElementSibling.classList.toggle('hidden'); this.querySelector('span').textContent = this.nextElementSibling.classList.contains('hidden') ? 'Show' : 'Hide';"
+        class="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1">
+        <span>Show</span> ${dupCount} duplicate scan${dupCount > 1 ? 's' : ''} hidden
+      </button>
+      <div class="hidden mt-1 pl-1 border-l-2 border-amber-100">
+        ${dupEvents.map(buildEventRow).join('')}
+      </div>
+    </div>` : '';
 
   el.innerHTML = `
+  {{-- Employee header --}}
   <div class="flex items-center gap-3 mb-4 pb-4 border-b border-slate-100">
-    <div class="size-10 rounded-full flex items-center justify-center text-white font-bold text-sm" style="background:${emp.color}">${emp.initials}</div>
-    <div>
-      <div class="font-bold text-slate-800">${emp.name}</div>
+    <div class="size-11 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0" style="background:${emp.color}">${emp.initials}</div>
+    <div class="flex-1 min-w-0">
+      <div class="font-bold text-slate-800 truncate">${emp.name}</div>
       <div class="text-xs text-slate-400">${emp.department}</div>
     </div>
+    <span class="text-xs font-semibold px-2.5 py-1 rounded-full border ${ss.cls} whitespace-nowrap flex-shrink-0">${ss.label}</span>
   </div>
-  <div class="relative timeline-line overflow-y-auto max-h-72 scrollbar-thin pr-1">
-    ${events}
-  </div>
-  <div class="mt-4 pt-4 border-t border-slate-100 grid grid-cols-2 gap-3 text-xs">
-    <div class="bg-slate-50 rounded-xl p-2.5 text-center">
-      <div class="text-slate-500">Working Hours</div>
+
+  {{-- Summary row --}}
+  <div class="grid grid-cols-3 gap-2 mb-4 text-xs text-center">
+    <div class="bg-slate-50 rounded-xl p-2.5">
+      <div class="text-slate-400">First In</div>
+      <div class="font-bold text-emerald-600 mt-0.5">${sum.first_in ?? '--'}</div>
+    </div>
+    <div class="bg-slate-50 rounded-xl p-2.5">
+      <div class="text-slate-400">Last Out</div>
+      <div class="font-bold text-rose-500 mt-0.5">${sum.last_out ?? '--'}</div>
+    </div>
+    <div class="bg-slate-50 rounded-xl p-2.5">
+      <div class="text-slate-400">Hours</div>
       <div class="font-bold text-slate-800 mt-0.5">${sum.working_hours ?? '--'}</div>
     </div>
-    <div class="bg-slate-50 rounded-xl p-2.5 text-center">
-      <div class="text-slate-500">Total Punches</div>
-      <div class="font-bold text-slate-800 mt-0.5">${sum.total_punches}</div>
-    </div>
-    <div class="bg-slate-50 rounded-xl p-2.5 text-center">
-      <div class="text-slate-500">First Punch</div>
-      <div class="font-bold text-slate-800 mt-0.5">${sum.first_punch}</div>
-    </div>
-    <div class="bg-slate-50 rounded-xl p-2.5 text-center">
-      <div class="text-slate-500">Last Punch</div>
-      <div class="font-bold text-slate-800 mt-0.5">${sum.last_punch ?? '--'}</div>
-    </div>
   </div>
-  <div class="mt-3 text-center text-xs font-bold py-2 rounded-xl ${sum.status==='present'?'bg-emerald-50 text-emerald-700':sum.status==='in_office'?'bg-blue-50 text-blue-700':'bg-slate-50 text-slate-500'}">
-    Total Status: ${sum.status === 'present' ? 'Present' : sum.status === 'in_office' ? 'In Office' : sum.status}
+
+  {{-- Sessions --}}
+  <div class="mb-4">
+    <div class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">Today's Sessions</div>
+    <div class="space-y-2">${sessionHtml}</div>
+  </div>
+
+  {{-- Raw Events Timeline --}}
+  <div>
+    <div class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">Raw Events</div>
+    <div class="pl-1">
+      ${visibleEvents.map(buildEventRow).join('')}
+      ${dupSection}
+    </div>
   </div>`;
 }
 
