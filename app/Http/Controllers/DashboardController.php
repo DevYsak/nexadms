@@ -217,9 +217,11 @@ class DashboardController extends Controller
         });
 
         // Summary
-        $sessions_col = $sessions->collect();
-        $firstIn  = $sessions_col->first()?['check_in'] ?? Carbon::parse($punches->first()->punch_time)->format('h:i A');
-        $lastOut  = $sessions_col->last()?['check_out'] ?? null;
+        $sessions_col  = $sessions->collect();
+        $firstSession  = $sessions_col->first();
+        $lastSession   = $sessions_col->last();
+        $firstIn  = $firstSession ? $firstSession['check_in'] : Carbon::parse($punches->first()->punch_time)->format('h:i A');
+        $lastOut  = $lastSession  ? $lastSession['check_out']  : null;
         $totalMins = AttendanceSession::where('employee_code', $code)
             ->where('session_date', $date)
             ->sum('duration_minutes');
