@@ -6,6 +6,10 @@ use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 
 return Application::configure(basePath: dirname(__DIR__))
+    ->withSchedule(function (\Illuminate\Console\Scheduling\Schedule $schedule) {
+        // Process unprocessed raw logs every 2 minutes and recalculate today's sessions
+        $schedule->command('attendance:process-backlog')->everyTwoMinutes()->withoutOverlapping();
+    })
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
         then: function () {
