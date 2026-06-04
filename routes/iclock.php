@@ -10,12 +10,15 @@ use Illuminate\Support\Facades\Route;
  */
 
 Route::prefix('iclock')->group(function () {
-    // Step 1 & 2: Handshake (GET) + Push (POST)
-    Route::match(['GET', 'POST'], '/cdata', [IclockController::class, 'cdata']);
+    // Step 1 & 2: Handshake (GET) + Push (POST) — with and without .aspx suffix
+    Route::match(['GET', 'POST'], '/cdata',      [IclockController::class, 'cdata']);
+    Route::match(['GET', 'POST'], '/cdata.aspx', [IclockController::class, 'cdata']);
 
     // Step 4: Device polls for pending commands
-    Route::get('/getrequest', [IclockController::class, 'getrequest']);
+    Route::get('/getrequest',      [IclockController::class, 'getrequest']);
+    Route::get('/getrequest.aspx', [IclockController::class, 'getrequest']);
 
     // Step 5: Device replies to commands
-    Route::post('/devicecmd', [IclockController::class, 'devicecmd']);
+    Route::post('/devicecmd',      [IclockController::class, 'devicecmd']);
+    Route::post('/devicecmd.aspx', [IclockController::class, 'devicecmd']);
 });

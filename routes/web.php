@@ -1,7 +1,10 @@
 <?php
 
+use App\Http\Controllers\AttendanceApiController;
 use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\EmployeeSyncController;
+use App\Http\Middleware\AttendanceApiKey;
 use Illuminate\Support\Facades\Route;
 
 // ── Root → Dashboard ─────────────────────────────────────────────────────────
@@ -19,6 +22,14 @@ Route::prefix('api/attendance')->name('api.attendance.')->group(function () {
 });
 
 Route::get('/api/sync/status', [DashboardController::class, 'syncStatusApi'])->name('api.sync.status');
+Route::post('/api/employees/sync', [EmployeeSyncController::class, 'sync'])->name('api.employees.sync');
+
+// ── Attendance API (consumed by HRMS) ─────────────────────────────────────────
+Route::middleware(AttendanceApiKey::class)->prefix('api/attendance')->name('api.attendance.')->group(function () {
+    Route::get('today',                  [AttendanceApiController::class, 'today'])->name('today');
+    Route::get('date/{date}',            [AttendanceApiController::class, 'byDate'])->name('byDate');
+    Route::get('employee/{code}',        [AttendanceApiController::class, 'byEmployee'])->name('byEmployee');
+});
 
 // ── Admin Correction ──────────────────────────────────────────────────────────
 Route::prefix('admin')->name('admin.')->group(function () {
