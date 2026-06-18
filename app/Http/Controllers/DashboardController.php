@@ -476,6 +476,41 @@ class DashboardController extends Controller
     }
 
     // =========================================================================
+    // AJAX — Recent Punches (live feed widget)
+    // =========================================================================
+
+    public function recentPunchesApi(Request $request): JsonResponse
+    {
+        $limit = min(20, max(1, (int) $request->input('limit', 10)));
+
+        $punches = BiometricAttendance::orderByDesc('punch_time')
+            ->orderByDesc('id')
+            ->limit($limit)
+            ->get();
+
+        $empMap = Employee::whereIn('employee_code', $punches->pluck('employee_code')->unique())
+            ->get()
+            ->keyBy('employee_code');
+
+        $rows = $punches->map(function ($p) use ($empMap) {
+            $emp = $empMap->get($p->employee_code);
+            return [
+                'id'          => $p->id,
+                'code'        => $p->employee_code,
+                'name'        => $emp?->name ?? ('Emp #' . $p->employee_code),
+                'initials'    => $emp?->initials ?? strtoupper(substr($p->employee_code, 0, 2)),
+                'color'       => $emp?->avatar_color ?? '#6366f1',
+                'punch_time'  => Carbon::parse($p->punch_time)->format('h:i:s A'),
+                'punch_date'  => Carbon::parse($p->punch_time)->format('d M'),
+                'direction'   => $p->punch_direction,
+                'verify'      => $p->verify_type_label,
+            ];
+        });
+
+        return response()->json(['punches' => $rows->values()]);
+    }
+
+    // =========================================================================
     // Reports
     // =========================================================================
 

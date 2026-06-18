@@ -21,7 +21,8 @@ Route::prefix('api/attendance')->name('api.attendance.')->group(function () {
     Route::get('report',            [DashboardController::class, 'reportApi'])->name('report');
 });
 
-Route::get('/api/sync/status', [DashboardController::class, 'syncStatusApi'])->name('api.sync.status');
+Route::get('/api/sync/status',          [DashboardController::class, 'syncStatusApi'])->name('api.sync.status');
+Route::get('/api/attendance/recent-punches', [DashboardController::class, 'recentPunchesApi'])->name('api.attendance.recent');
 Route::get('/device-status', [DashboardController::class, 'deviceStatusPage'])->name('device.status');
 Route::post('/api/employees/sync', [EmployeeSyncController::class, 'sync'])->name('api.employees.sync');
 

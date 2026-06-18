@@ -147,6 +147,20 @@
         @endforeach
       </div>
 
+      {{-- Latest Punches Widget --}}
+      <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+        <div class="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <h2 class="font-bold text-slate-800 text-sm">Latest Punches</h2>
+            <span class="size-2 rounded-full bg-emerald-500 pulse-dot"></span>
+          </div>
+          <span class="text-xs text-slate-400" id="recent-updated">Live</span>
+        </div>
+        <div id="recent-punches-list" class="divide-y divide-slate-50">
+          <div class="px-5 py-4 text-center text-slate-400 text-sm">Loading…</div>
+        </div>
+      </div>
+
       {{-- Filter Bar --}}
       <div class="bg-white rounded-2xl border border-slate-200 p-4 flex flex-wrap gap-3 items-end">
         <div class="flex-1 min-w-48">
@@ -533,6 +547,53 @@ function renderTimeline(data, el) {
   </div>`;
 }
 
+// ── Recent Punches ────────────────────────────────────────────────────────────
+let lastRecentPunchId = null;
+
+async function loadRecentPunches() {
+  try {
+    const res  = await fetch('/api/attendance/recent-punches?limit=10');
+    const data = await res.json();
+    renderRecentPunches(data.punches);
+    document.getElementById('recent-updated').textContent =
+      'Updated ' + new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  } catch(e) {}
+}
+
+function renderRecentPunches(punches) {
+  const el = document.getElementById('recent-punches-list');
+  if (!punches || !punches.length) {
+    el.innerHTML = '<div class="px-5 py-4 text-center text-slate-400 text-sm">No punches yet.</div>';
+    return;
+  }
+
+  const isNew = lastRecentPunchId !== null && punches[0]?.id !== lastRecentPunchId;
+  lastRecentPunchId = punches[0]?.id;
+
+  el.innerHTML = `<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 divide-x divide-slate-50">
+    ${punches.slice(0,10).map((p, i) => {
+      const isIn  = p.direction === 'in';
+      const isOut = p.direction === 'out';
+      const dirBadge = isIn
+        ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">↗ IN</span>'
+        : isOut
+        ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-600">↙ OUT</span>'
+        : '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500">— —</span>';
+      const highlightCls = (i === 0 && isNew) ? 'bg-blue-50' : '';
+      return `
+      <div class="px-4 py-3 flex items-center gap-3 ${highlightCls} ${i===0&&isNew?'fade-in':''}">
+        <div class="size-9 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+             style="background:${p.color}">${p.initials}</div>
+        <div class="min-w-0">
+          <div class="font-semibold text-slate-800 text-xs truncate">${p.name}</div>
+          <div class="text-[11px] text-slate-400 font-mono">${p.punch_date} &nbsp;${p.punch_time}</div>
+          <div class="mt-0.5">${dirBadge}</div>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
 // ── Stats ─────────────────────────────────────────────────────────────────────
 async function loadStats() {
   try {
@@ -642,12 +703,14 @@ function refreshAll() {
   loadGrid(currentPage);
   loadStats();
   loadSyncStatus();
+  loadRecentPunches();
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 loadGrid(1);
 loadStats();
 loadSyncStatus();
+loadRecentPunches();
 startCountdown();
 </script>
 </body>
