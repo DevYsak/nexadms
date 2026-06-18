@@ -58,7 +58,13 @@ class RawLogProcessorService
                 $pin        = $parts[0];
                 $dateTime   = $parts[1] . ' ' . $parts[2];   // "2026-06-01 07:31:44"
                 $verifyType = (int) ($parts[3] ?? 0);
-                $inOut      = (int) ($parts[4] ?? 0);         // 0=check_in, 1=check_out (device-set, often 0)
+                $inOut      = (int) ($parts[4] ?? -1);
+
+                $punchDirection = match ($inOut) {
+                    0, 4    => 'in',
+                    1, 5    => 'out',
+                    default => 'unknown',
+                };
 
                 try {
                     $punchTime = Carbon::createFromFormat('Y-m-d H:i:s', $dateTime, 'Asia/Kolkata');
@@ -74,8 +80,9 @@ class RawLogProcessorService
                         'device_id'     => $device?->id,
                     ],
                     [
-                        'verify_type' => $verifyType,
-                        'event_type'  => 'unknown',   // Will be set by recalculation
+                        'verify_type'     => $verifyType,
+                        'punch_direction' => $punchDirection,
+                        'event_type'      => 'unknown',
                     ]
                 );
 
