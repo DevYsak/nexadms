@@ -61,7 +61,7 @@ class RawLogProcessorService
                 $inOut      = (int) ($parts[4] ?? 0);         // 0=check_in, 1=check_out (device-set, often 0)
 
                 try {
-                    $punchTime = Carbon::parse($dateTime);
+                    $punchTime = Carbon::createFromFormat('Y-m-d H:i:s', $dateTime, 'Asia/Kolkata');
                 } catch (\Throwable) {
                     continue;
                 }
