@@ -19,6 +19,11 @@ class DashboardController extends Controller
     // Main Dashboard
     // =========================================================================
 
+    public function deviceStatusPage()
+    {
+        return view('attendance.device-status');
+    }
+
     public function index(Request $request)
     {
         $date       = $request->input('date', today()->toDateString());
