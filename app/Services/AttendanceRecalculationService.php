@@ -192,7 +192,7 @@ class AttendanceRecalculationService
             $t = Carbon::parse($punch->punch_time);
 
             $isSameDir        = $prevDir !== null && $dir === $prevDir;
-            $isWithinWindow   = $prevTime !== null && $t->diffInSeconds($prevTime) <= self::DIR_DEDUP_SECONDS;
+            $isWithinWindow   = $prevTime !== null && abs($t->diffInSeconds($prevTime)) <= self::DIR_DEDUP_SECONDS;
 
             if ($isSameDir && $isWithinWindow) {
                 $skipped[] = $punch->id;
@@ -432,7 +432,7 @@ class AttendanceRecalculationService
         foreach ($punches as $punch) {
             $t = Carbon::parse($punch->punch_time);
 
-            if ($clusterStart === null || $t->diffInSeconds($clusterStart) > $windowSecs) {
+            if ($clusterStart === null || abs($t->diffInSeconds($clusterStart)) > $windowSecs) {
                 if (! empty($current)) {
                     $clusters[] = $current;
                 }
