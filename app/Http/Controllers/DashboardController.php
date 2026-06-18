@@ -148,7 +148,9 @@ class DashboardController extends Controller
                 'initials'      => $emp->initials,
                 'avatar_color'  => $emp->avatar_color,
                 'punch_count'   => $punchCount,
+                'session_count' => $summary['session_count'] ?? 0,
                 'first_in'      => $summary['first_in'],
+                'first_in_iso'  => $summary['first_in_iso'] ?? null,
                 'last_out'      => $summary['last_out'],
                 'working_hours' => $summary['working_hours'],
                 'status'        => $status,
@@ -178,10 +180,8 @@ class DashboardController extends Controller
             'department' => $employee->department,
             'initials'   => $employee->initials,
             'color'      => $employee->avatar_color,
-        ] : ['name' => 'Employee ' . $code, 'department' => '-', 'initials' => strtoupper(substr($code, 0, 2)), 'color' => '#6366f1'];
+        ] : ['name' => 'Employee '.$code, 'department' => '-', 'initials' => strtoupper(substr($code, 0, 2)), 'color' => '#6366f1'];
 
-        // Recalculate when sessions are missing OR any punch is still 'unknown'
-        // (unknown = sessions were built before the pairing algorithm was in place)
         $needsRecalc = ! AttendanceSession::where('employee_code', $code)->where('session_date', $date)->exists()
             || BiometricAttendance::where('employee_code', $code)->whereDate('punch_time', $date)->where('event_type', 'unknown')->exists();
 
@@ -189,60 +189,56 @@ class DashboardController extends Controller
             app(AttendanceRecalculationService::class)->recalculate($code, $date);
         }
 
-        $allPunches = BiometricAttendance::where('employee_code', $code)
-            ->whereDate('punch_time', $date)
-            ->orderBy('punch_time')
-            ->get();
-
-        if ($allPunches->isEmpty()) {
-            return response()->json(['employee' => $empData, 'sessions' => [], 'events' => [], 'summary' => null]);
-        }
-
+        // Fetch punches for this date. For overnight sessions the checkout punch
+        // lives on the next calendar day, so we pull those too.
         $sessions = AttendanceSession::where('employee_code', $code)
             ->where('session_date', $date)
             ->orderBy('session_index')
             ->get();
 
-        // Index punches by their time string for verify_label lookup
-        $punchByTime = $allPunches->keyBy(fn ($p) => Carbon::parse($p->punch_time)->format('H:i:s'));
+        $hasOvernight     = $sessions->where('is_overnight', true)->isNotEmpty();
+        $nextDay          = Carbon::parse($date)->addDay()->toDateString();
 
-        // Build clean events from sessions — include verify_label for timeline display
-        $events = [];
-        foreach ($sessions as $s) {
-            if ($s->check_in_at) {
-                $p = $punchByTime->get($s->check_in_at->format('H:i:s'));
-                $events[] = [
-                    'type'         => 'check_in',
-                    'time'         => $s->check_in_at->format('h:i A'),
-                    'verify_label' => $p?->verify_type_label,
-                    'is_duplicate' => false,
-                ];
-            }
-            if ($s->check_out_at) {
-                $p = $punchByTime->get($s->check_out_at->format('H:i:s'));
-                $events[] = [
-                    'type'         => 'check_out',
-                    'time'         => $s->check_out_at->format('h:i A'),
-                    'verify_label' => $p?->verify_type_label,
-                    'is_duplicate' => false,
-                ];
-            }
+        $allPunches = BiometricAttendance::where('employee_code', $code)
+            ->where(function ($q) use ($date, $hasOvernight, $nextDay) {
+                $q->whereDate('punch_time', $date);
+                if ($hasOvernight) {
+                    // Also load overnight checkout punches from next day
+                    $q->orWhere(function ($q2) use ($nextDay) {
+                        $q2->whereDate('punch_time', $nextDay)
+                           ->where('event_type', 'check_out');
+                    });
+                }
+            })
+            ->orderBy('punch_time')
+            ->get();
+
+        if ($allPunches->isEmpty() && $sessions->isEmpty()) {
+            return response()->json(['employee' => $empData, 'sessions' => [], 'events' => [], 'summary' => null]);
         }
 
-        // Skipped punches — hidden by default
-        foreach ($allPunches->where('event_type', 'skipped') as $p) {
-            $t = Carbon::parse($p->punch_time);
-            $events[] = ['type' => 'duplicate', 'time' => $t->format('h:i A'), 'verify_label' => $p->verify_type_label, 'is_duplicate' => true];
-        }
+        // Index punches by Y-m-d H:i:s for accurate lookup (avoids AM/PM collisions).
+        // Use the raw string from the cast — Carbon's toDateTimeString() must match
+        // the format stored in the DB to avoid timezone-offset mismatches.
+        $punchByDt = $allPunches->keyBy(fn ($p) => $p->punch_time->format('Y-m-d H:i:s'));
 
-        // Sessions with break/current durations and punch count
-        $sessArr = $sessions->values();
-        $sessionData = $sessArr->map(function ($s, $i) use ($sessArr, $allPunches) {
+        // ── Session cards ─────────────────────────────────────────────────────
+        $sessArr     = $sessions->values();
+        $sessionData = $sessArr->map(function ($s, $i) use ($sessArr, $allPunches, $punchByDt, $date) {
             $prev      = $i > 0 ? $sessArr[$i - 1] : null;
-            $breakMins = $prev && $prev->check_out_at && $s->check_in_at
+            $breakMins = ($prev && $prev->check_out_at && $s->check_in_at)
                 ? (int) $prev->check_out_at->diffInMinutes($s->check_in_at) : null;
-            $currentMins = (! $s->check_out_at && $s->check_in_at)
+            $isOpen    = $s->check_out_at === null;
+            $currentMins = ($isOpen && $s->check_in_at)
                 ? (int) $s->check_in_at->diffInMinutes(now()) : null;
+
+            // Lookup verify info from actual punches
+            $inPunch  = $s->check_in_at  ? $punchByDt->get($s->check_in_at->format('Y-m-d H:i:s'))  : null;
+            $outPunch = $s->check_out_at ? $punchByDt->get($s->check_out_at->format('Y-m-d H:i:s')) : null;
+
+            // Is checkout on a different calendar day?
+            $checkOutDate = $s->check_out_at?->toDateString();
+            $isOvernightDisplay = $s->is_overnight || ($checkOutDate && $checkOutDate !== $date);
 
             $windowEnd  = $s->check_out_at ?? now();
             $punchCount = $allPunches->filter(function ($p) use ($s, $windowEnd) {
@@ -251,37 +247,69 @@ class DashboardController extends Controller
             })->count();
 
             return [
-                'index'            => $s->session_index + 1,
-                'check_in'         => $s->check_in_at?->format('h:i A'),
-                'check_out'        => $s->check_out_at?->format('h:i A'),
-                'duration'         => $s->duration_human,
-                'break_before'     => $breakMins !== null ? sprintf('%dh %02dm', intdiv($breakMins, 60), $breakMins % 60) : null,
-                'current_duration' => $currentMins !== null ? sprintf('%dh %02dm', intdiv($currentMins, 60), $currentMins % 60) : null,
-                'punch_count'      => $punchCount,
-                'status'           => $s->status,
-                'admin_note'       => $s->admin_note,
+                'index'              => $s->session_index + 1,
+                // Display times
+                'check_in'           => $s->check_in_at?->format('h:i A'),
+                'check_out'          => $s->check_out_at?->format('h:i A'),
+                // Full date+time for overnight display
+                'check_in_datetime'  => $s->check_in_at?->format('d M h:i A'),
+                'check_out_datetime' => $s->check_out_at?->format('d M h:i A'),
+                // ISO for JS live counter
+                'check_in_iso'       => $s->check_in_at?->toIso8601String(),
+                // Verify method
+                'check_in_via'       => $inPunch?->verify_type_label,
+                'check_in_icon'      => $inPunch?->verify_icon,
+                'check_out_via'      => $outPunch?->verify_type_label,
+                'check_out_icon'     => $outPunch?->verify_icon,
+                // Durations
+                'duration'           => $s->duration_human,
+                'duration_minutes'   => $s->duration_minutes,
+                'break_before'       => $breakMins !== null
+                    ? sprintf('%dh %02dm', intdiv($breakMins, 60), $breakMins % 60) : null,
+                'current_duration'   => $currentMins !== null
+                    ? sprintf('%dh %02dm', intdiv($currentMins, 60), $currentMins % 60) : null,
+                // Flags
+                'is_open'            => $isOpen,
+                'is_overnight'       => $isOvernightDisplay,
+                'punch_count'        => $punchCount,
+                'status'             => $s->status,
+                'admin_note'         => $s->admin_note,
             ];
         });
 
-        $totalMins     = $sessions->sum('duration_minutes');
+        // ── Duplicate events (hidden by default) ──────────────────────────────
+        $dupPunches = $allPunches->where('event_type', 'skipped');
+
+        // ── Summary ───────────────────────────────────────────────────────────
+        $totalMins     = (int) $sessions->sum('duration_minutes');
         $lastCompleted = $sessions->filter(fn ($s) => $s->check_out_at)->last();
         $lastSess      = $sessions->last();
         $firstSess     = $sessions->first();
-        $dupCount      = $allPunches->where('event_type', 'skipped')->count();
+        $dupCount      = $dupPunches->count();
+        // Filter on a Collection using a closure — whereDate() is a query-builder method only
+        $dayPunches    = $allPunches->filter(fn ($p) => Carbon::parse($p->punch_time)->toDateString() === $date);
 
-        $status = $lastSess
-            ? ($lastSess->check_out_at ? 'checked_out' : 'in_office')
-            : 'no_attendance';
+        $status = $sessions->isEmpty()
+            ? 'no_attendance'
+            : ($lastSess->is_overnight || $lastSess->check_out_at ? 'checked_out' : 'in_office');
+
+        if ($lastSess && $lastSess->status === 'admin_corrected') {
+            $status = 'admin_corrected';
+        }
 
         return response()->json([
             'employee' => $empData,
             'sessions' => $sessionData->values(),
-            'events'   => array_values($events),
+            'duplicates' => $dupPunches->map(fn ($p) => [
+                'time'         => Carbon::parse($p->punch_time)->format('h:i A'),
+                'verify_label' => $p->verify_type_label,
+                'verify_icon'  => $p->verify_icon,
+            ])->values(),
             'summary'  => [
                 'first_in'       => $firstSess?->check_in_at?->format('h:i A'),
                 'last_out'       => $lastCompleted?->check_out_at?->format('h:i A'),
                 'total_sessions' => $sessions->count(),
-                'total_punches'  => $allPunches->count(),
+                'total_punches'  => $dayPunches->count(),
                 'dup_count'      => $dupCount,
                 'working_hours'  => $totalMins ? sprintf('%dh %02dm', intdiv($totalMins, 60), $totalMins % 60) : null,
                 'status'         => $status,

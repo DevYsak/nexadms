@@ -30,10 +30,8 @@ class AttendanceSession extends Model
                 $first         = $sorted->first();
                 $lastCompleted = $sorted->filter(fn ($s) => $s->check_out_at !== null)->last();
                 $openSession   = $sorted->filter(fn ($s) => $s->check_out_at === null)->first();
-                $totalMins     = $sessions->sum('duration_minutes');
+                $totalMins     = (int) $sessions->sum('duration_minutes');
 
-                // Status: in_office only when the LAST session is still open.
-                // If the last session is completed → employee has checked out.
                 $lastSession = $sorted->last();
                 if ($lastSession->check_out_at !== null) {
                     $status = 'checked_out';
@@ -45,9 +43,12 @@ class AttendanceSession extends Model
 
                 return [
                     'first_in'      => $first->check_in_at?->format('h:i A'),
+                    // ISO timestamp — lets the grid JS calculate live working hours
+                    'first_in_iso'  => $first->check_in_at?->toIso8601String(),
                     'last_out'      => $lastCompleted?->check_out_at?->format('h:i A'),
                     'working_hours' => $totalMins ? sprintf('%dh %02dm', intdiv($totalMins, 60), $totalMins % 60) : null,
                     'status'        => $status,
+                    'session_count' => $sessions->count(),
                 ];
             })
             ->toArray();

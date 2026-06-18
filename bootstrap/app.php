@@ -9,6 +9,8 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withSchedule(function (\Illuminate\Console\Scheduling\Schedule $schedule) {
         // Process unprocessed raw logs every 2 minutes and recalculate today's sessions
         $schedule->command('attendance:process-backlog')->everyTwoMinutes()->withoutOverlapping();
+        // Recover open overnight sessions from past dates (runs once daily at 01:00)
+        $schedule->command('attendance:recover-sessions')->dailyAt('01:00')->withoutOverlapping();
     })
     ->withRouting(
         web: __DIR__.'/../routes/web.php',

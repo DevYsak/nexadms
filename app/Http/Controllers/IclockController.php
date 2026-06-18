@@ -166,9 +166,18 @@ class IclockController extends Controller
     /**
      * Parse ATTLOG body and upsert attendance records.
      *
-     * ZKTeco ATTLOG line format:
-     *   PIN  DateTime              Verify  InOut  Reserved  WorkCode
-     *   17   2026-06-01 07:31:44  1       0      0         0
+     * eSSL AiFace Magnum / ZKTeco ATTLOG line format (tab OR space separated):
+     *
+     *   PIN   DateTime               Verify  InOut  WorkCode  Reserved
+     *   5     2026-06-03 20:36:22    255     1      0         0
+     *
+     *   parts[0]  PIN          — employee code
+     *   parts[1]  Date         — YYYY-MM-DD
+     *   parts[2]  Time         — HH:MM:SS  (split because of space in DateTime)
+     *   parts[3]  Verify       — biometric method: 1=FP, 15=Card, 255=Face
+     *   parts[4]  InOut        — direction: 0=in, 1=out, 4=OT-in, 5=OT-out
+     *   parts[5]  WorkCode
+     *   parts[6]  Reserved
      *
      * Returns the new stamp (total records received including this batch).
      */
@@ -183,20 +192,27 @@ class IclockController extends Controller
                 $line = trim($line);
                 if ($line === '') continue;
 
-                // Some firmware sends tab-separated, some space-separated
+                // Handles tab-separated and space-separated firmware variants
                 $parts = preg_split('/[\t ]+/', $line);
                 if (count($parts) < 3) continue;
 
-                $pin        = trim($parts[0]);
-                $rawDate    = trim($parts[1]);
-                $rawTime    = isset($parts[2]) && strlen($parts[2]) > 3 ? trim($parts[2]) : '';
+                $pin     = trim($parts[0]);
+                $rawDate = trim($parts[1]);
+                $rawTime = isset($parts[2]) && strlen($parts[2]) > 3 ? trim($parts[2]) : '';
+
+                // parts[3] = Verify type (biometric method)
                 $verifyType = (int) ($parts[3] ?? 0);
 
-                // Handle both "2026-06-01 07:31:44" (space-joined in body)
-                // and split into parts[1]=date parts[2]=time
-                $dateTimeStr = $rawTime
-                    ? "{$rawDate} {$rawTime}"
-                    : $rawDate;
+                // parts[4] = InOut direction from device
+                // 0 = check-in, 1 = check-out, 4 = OT check-in, 5 = OT check-out
+                $inOut          = (int) ($parts[4] ?? -1);
+                $punchDirection = match ($inOut) {
+                    0, 4    => 'in',
+                    1, 5    => 'out',
+                    default => 'unknown',   // field absent (older firmware)
+                };
+
+                $dateTimeStr = $rawTime ? "{$rawDate} {$rawTime}" : $rawDate;
 
                 try {
                     $punchTime = Carbon::parse($dateTimeStr);
@@ -204,6 +220,9 @@ class IclockController extends Controller
                     continue;
                 }
 
+                // firstOrCreate: deduplication is by (employee_code, punch_time, device_id).
+                // Direction and verify_type are set only on INSERT — never overwritten on
+                // subsequent pushes so an admin correction to event_type is preserved.
                 BiometricAttendance::firstOrCreate(
                     [
                         'employee_code' => $pin,
@@ -211,8 +230,9 @@ class IclockController extends Controller
                         'device_id'     => $device->id,
                     ],
                     [
-                        'verify_type' => $verifyType,
-                        'event_type'  => 'unknown',
+                        'verify_type'     => $verifyType,
+                        'punch_direction' => $punchDirection,
+                        'event_type'      => 'unknown',
                     ]
                 );
 
