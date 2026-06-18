@@ -620,7 +620,23 @@ async function loadSyncStatus() {
     if (devices.length) {
       const d = devices[0];
       document.getElementById('sync-last-time').textContent = d.last_activity_ts ?? '—';
-      document.getElementById('sidebar-sync-status').innerHTML = devices.map(dv => `
+      document.getElementById('sidebar-sync-status').innerHTML = devices.map(dv => {
+        let clockLine = '';
+        if (dv.device_time) {
+          const ok = dv.clock_ok;
+          const drift = dv.clock_drift_min;
+          const driftTxt = (drift === 0) ? 'in sync'
+            : (drift > 0 ? `+${drift} min ahead` : `${drift} min behind`);
+          clockLine = `
+            <div class="mt-1 pt-1 border-t border-slate-700/50">
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] text-slate-500">Device Clock</span>
+                <span class="text-[10px] font-semibold ${ok?'text-emerald-400':'text-rose-400'}">${ok?'✓ OK':'⚠ '+driftTxt}</span>
+              </div>
+              <div class="text-[11px] font-mono ${ok?'text-slate-300':'text-rose-300'}">${dv.device_time}</div>
+            </div>`;
+        }
+        return `
         <div class="flex items-center justify-between">
           <span class="truncate">${dv.serial_number}</span>
           <span class="flex items-center gap-1 text-[10px] ${dv.is_online?'text-emerald-400':'text-slate-500'}">
@@ -629,7 +645,8 @@ async function loadSyncStatus() {
           </span>
         </div>
         <div class="text-[10px] text-slate-500">Synced: ${dv.last_activity}</div>
-      `).join('');
+        ${clockLine}`;
+      }).join('');
     }
   } catch(e) {}
 }

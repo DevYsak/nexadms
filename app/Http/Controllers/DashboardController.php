@@ -347,6 +347,27 @@ class DashboardController extends Controller
                 ->latest('id')
                 ->first();
 
+            // ── Device clock estimate ─────────────────────────────────────────
+            // The device only reports its clock inside a punch. We compare the
+            // punch's device wall-clock time against when the server actually
+            // received it (created_at) to derive the clock drift, then project
+            // the device's "now".
+            $lastPunch   = BiometricAttendance::where('device_id', $d->id)->latest('id')->first();
+            $deviceNow   = null;
+            $driftMin    = null;
+            $clockOk     = null;
+            $lastPunchAt = null;
+
+            if ($lastPunch && $lastPunch->created_at) {
+                $deviceWall = Carbon::parse($lastPunch->punch_time);   // what device thinks
+                $serverGot  = Carbon::parse($lastPunch->created_at);   // real IST arrival
+                $driftSec   = $deviceWall->getTimestamp() - $serverGot->getTimestamp();
+                $driftMin   = (int) round($driftSec / 60);
+                $clockOk    = abs($driftMin) <= 3;
+                $deviceNow  = now()->copy()->addSeconds($driftSec)->format('d M Y h:i:s A');
+                $lastPunchAt = $deviceWall->format('d M h:i A');
+            }
+
             return [
                 'serial_number'  => $d->serial_number,
                 'name'           => $d->name ?? $d->serial_number,
@@ -357,6 +378,11 @@ class DashboardController extends Controller
                 'last_attlog'    => $lastLog ? Carbon::parse($lastLog->received_at)->toDateTimeString() : null,
                 'records_today'  => BiometricAttendance::where('device_id', $d->id)
                     ->whereDate('punch_time', today())->count(),
+                // Clock health
+                'device_time'    => $deviceNow,
+                'device_last_punch' => $lastPunchAt,
+                'clock_drift_min' => $driftMin,
+                'clock_ok'       => $clockOk,
             ];
         });
 
