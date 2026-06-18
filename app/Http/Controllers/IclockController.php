@@ -9,6 +9,7 @@ use App\Services\AttendanceRecalculationService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -58,8 +59,46 @@ class IclockController extends Controller
             $device->update(['last_activity_at' => now(), 'last_online_at' => now()]);
         }
 
+        // ── Periodic clock sync ───────────────────────────────────────────────
+        // The device keeps its own RTC. If its timezone/clock drifts (e.g. it was
+        // left on UTC+8), every punch lands at the wrong time. We push an explicit
+        // "set clock to IST now" command. Throttled to once / 30 min per device so
+        // we don't issue SET OPTION on every ~10s poll.
+        $cacheKey = "device_clock_sync:{$sn}";
+        if ($sn !== '' && ! Cache::has($cacheKey)) {
+            Cache::put($cacheKey, true, now()->addMinutes(30));
+
+            $cmd = $this->buildClockSyncCommand();
+            Log::channel('stack')->info("[ADMS] Pushing clock-sync to {$sn}: {$cmd}");
+
+            return response($cmd . "\r\n", 200, ['Content-Type' => 'text/plain']);
+        }
+
         // No pending commands → tell device to check back later
         return response("OK\r\n", 200, ['Content-Type' => 'text/plain']);
+    }
+
+    /**
+     * Build a ZKTeco ADMS command that sets the device clock to the current IST
+     * wall-clock time.
+     *
+     * ZKTeco encodes DateTime as a single integer:
+     *   ((Y-2000)*12*31 + (M-1)*31 + (D-1)) * 86400 + h*3600 + m*60 + s
+     *
+     * Command line format the firmware expects:
+     *   C:<id>:SET OPTION DateTime=<encoded>
+     */
+    private function buildClockSyncCommand(): string
+    {
+        $tz = config('app.timezone', 'Asia/Kolkata');
+        $t  = now()->timezone($tz);
+
+        $encoded = ((($t->year - 2000) * 12 * 31) + (($t->month - 1) * 31) + ($t->day - 1)) * 86400
+            + ($t->hour * 3600) + ($t->minute * 60) + $t->second;
+
+        $id = $t->timestamp; // unique-ish command id
+
+        return "C:{$id}:SET OPTION DateTime={$encoded}";
     }
 
     // ─────────────────────────────────────────────────────────────────────────
