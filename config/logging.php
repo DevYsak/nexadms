@@ -124,6 +124,7 @@ return [
             'level' => env('BIOMETRIC_LOG_LEVEL', 'debug'),
             'days' => env('LOG_DAILY_DAYS', 14),
             'replace_placeholders' => true,
+            'permission' => 0666,
         ],
 
         'null' => [
