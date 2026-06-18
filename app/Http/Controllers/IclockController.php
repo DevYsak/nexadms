@@ -215,7 +215,9 @@ class IclockController extends Controller
                 $dateTimeStr = $rawTime ? "{$rawDate} {$rawTime}" : $rawDate;
 
                 try {
-                    $punchTime = Carbon::parse($dateTimeStr);
+                    // Device sends time in its local timezone (IST = Asia/Kolkata).
+                    // Parse explicitly so storage is timezone-aware.
+                    $punchTime = Carbon::createFromFormat('Y-m-d H:i:s', $dateTimeStr, 'Asia/Kolkata');
                 } catch (\Throwable) {
                     continue;
                 }
