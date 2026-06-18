@@ -188,19 +188,21 @@ class IclockController extends Controller
             'received_at'    => now(),
         ]);
 
-        $newStamp = $stamp;
+        $count = 0;
 
         if ($table === 'ATTLOG' && trim($body) !== '') {
-            $newStamp = $this->parseAndStoreAttlog($body, $device, $rawLog);
+            // parseAndStoreAttlog stores rows, advances $device->last_stamp to the
+            // device's own record stamp (so the next handshake tells the device it
+            // is caught up), and returns the number of records in THIS batch.
+            $count = $this->parseAndStoreAttlog($body, $device, $rawLog);
         }
 
-        // Update stamp so device won't resend these records
-        $device->update(['last_stamp' => max($device->last_stamp ?? 0, $newStamp)]);
+        Log::channel('stack')->info("[ADMS] {$table} from {$sn}: {$count} record(s), stamp now {$device->last_stamp}");
 
-        Log::channel('stack')->info("[ADMS] {$table} from {$sn}: stamp {$stamp}→{$newStamp}");
-
-        // Reply format: OK: <newStamp>
-        return response("OK: {$newStamp}\r\n", 200, ['Content-Type' => 'text/plain']);
+        // ZKTeco ADMS expects the reply to be the COUNT of records accepted in this
+        // batch — NOT a cumulative number. Returning a wrong/growing value makes the
+        // device think the upload failed and resend the same records forever.
+        return response("OK: {$count}\r\n", 200, ['Content-Type' => 'text/plain']);
     }
 
     /**
@@ -218,16 +220,20 @@ class IclockController extends Controller
      *   parts[4]  InOut        — direction: 0=in, 1=out, 4=OT-in, 5=OT-out
      *   parts[5]  WorkCode
      *   parts[6]  Reserved
+     *   parts[N]  Stamp        — device's own incrementing record id (last token)
      *
-     * Returns the new stamp (total records received including this batch).
+     * Returns the number of records parsed in THIS batch (the device's expected ACK).
+     * Also advances $device->last_stamp to the highest device record stamp seen so the
+     * next handshake tells the device it is caught up and stops resending.
      */
     private function parseAndStoreAttlog(string $body, BiometricDevice $device, BiometricRawLog $rawLog): int
     {
-        $lines   = preg_split('/\r?\n/', trim($body));
-        $count   = 0;
-        $dates   = [];
+        $lines    = preg_split('/\r?\n/', trim($body));
+        $count    = 0;
+        $dates    = [];
+        $maxStamp = 0;
 
-        DB::transaction(function () use ($lines, $device, &$count, &$dates) {
+        DB::transaction(function () use ($lines, $device, &$count, &$dates, &$maxStamp) {
             foreach ($lines as $line) {
                 $line = trim($line);
                 if ($line === '') continue;
@@ -235,6 +241,13 @@ class IclockController extends Controller
                 // Handles tab-separated and space-separated firmware variants
                 $parts = preg_split('/[\t ]+/', $line);
                 if (count($parts) < 3) continue;
+
+                // Last token is the device's own record stamp (e.g. 30023). Track the
+                // max so the handshake can report the device as synced.
+                $lineStamp = (int) end($parts);
+                if ($lineStamp > $maxStamp) {
+                    $maxStamp = $lineStamp;
+                }
 
                 $pin     = trim($parts[0]);
                 $rawDate = trim($parts[1]);
@@ -286,6 +299,12 @@ class IclockController extends Controller
         // Update raw log record count
         $rawLog->update(['records_parsed' => $count]);
 
+        // Advance the device stamp to the highest record id seen so the next
+        // handshake reports the device as caught up (stops the resend loop).
+        if ($maxStamp > 0) {
+            $device->update(['last_stamp' => max($device->last_stamp ?? 0, $maxStamp)]);
+        }
+
         // Trigger session recalculation for affected dates (async-friendly: just delete
         // existing sessions so gridApi auto-recalculates on next page load)
         if ($count > 0) {
@@ -304,6 +323,6 @@ class IclockController extends Controller
             }
         }
 
-        return ($device->last_stamp ?? 0) + $count;
+        return $count;
     }
 }
