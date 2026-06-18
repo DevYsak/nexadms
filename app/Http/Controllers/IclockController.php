@@ -114,6 +114,7 @@ class IclockController extends Controller
             "PushProtVer=2.4.1",
             "PushOptionsFlag=0",
             "SeverPortHTTPS=443",
+            "Date={$time}",
         ]) . "\r\n";
 
         Log::channel('stack')->info("[ADMS] Handshake from {$sn} (stamp={$stamp})");
