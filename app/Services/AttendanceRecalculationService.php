@@ -33,7 +33,7 @@ class AttendanceRecalculationService
      * 5400 = 90 minutes — covers extended checkout retry sessions
      * (e.g. employee tries face-scan from 08:36 PM to 09:39 PM = 63 minutes → same cluster).
      */
-    private const CLUSTER_WINDOW_SECS = 5400;
+    private const CLUSTER_WINDOW_SECS = 600;
 
     /**
      * When an open session exists on a past date, look for a checkout punch up to
