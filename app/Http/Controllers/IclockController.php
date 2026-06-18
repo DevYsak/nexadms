@@ -107,7 +107,7 @@ class IclockController extends Controller
             "TransTimes=00:00;14:05",
             "TransInterval=1",
             "TransFlag=TransData AttLog OpLog EnrollUser ChgUser EnrollFP ChgFP UserPic",
-            "TimeZone=5",
+            "TimeZone=5.5",
             "Realtime=1",
             "Encrypt=None",
             "ServerVer=2.2.14 2015-04-14",
