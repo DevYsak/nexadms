@@ -132,11 +132,24 @@ class IclockController extends Controller
 
         $stamp = $device->last_stamp ?? 0;
 
-        // Response format expected by ZKTeco ADMS firmware
-        $tz    = config('app.timezone', 'Asia/Kolkata');
-        $time  = now()->timezone($tz)->format('Y-m-d H:i:s');
+        $body = $this->buildOptionsBody($sn, (int) $stamp);
 
-        $body = implode("\r\n", [
+        Log::channel('stack')->info("[ADMS] Handshake from {$sn} (stamp={$stamp})");
+
+        return response($body, 200, ['Content-Type' => 'text/plain']);
+    }
+
+    /**
+     * Build the ZKTeco ADMS "GET OPTION" config block. This is the handshake
+     * response, but it can also be returned from a cdata POST to force a stuck
+     * device to re-read its ATTLOG cursor without waiting for a fresh handshake.
+     */
+    private function buildOptionsBody(string $sn, int $stamp): string
+    {
+        $tz   = config('app.timezone', 'Asia/Kolkata');
+        $time = now()->timezone($tz)->format('Y-m-d H:i:s');
+
+        return implode("\r\n", [
             "GET OPTION FROM: {$sn}",
             "ATTLOGStamp={$stamp}",
             "OPERLOGStamp=9999",
@@ -155,10 +168,6 @@ class IclockController extends Controller
             "SeverPortHTTPS=443",
             "Date={$time}",
         ]) . "\r\n";
-
-        Log::channel('stack')->info("[ADMS] Handshake from {$sn} (stamp={$stamp})");
-
-        return response($body, 200, ['Content-Type' => 'text/plain']);
     }
 
     private function handlePush(Request $request, string $sn): Response
@@ -188,6 +197,10 @@ class IclockController extends Controller
             'received_at'    => now(),
         ]);
 
+        // Cursor BEFORE this batch — used to detect a pure resend of records the
+        // server has already confirmed.
+        $priorStamp = (int) ($device->last_stamp ?? 0);
+
         $count = 0;
 
         if ($table === 'ATTLOG' && trim($body) !== '') {
@@ -197,7 +210,21 @@ class IclockController extends Controller
             $count = $this->parseAndStoreAttlog($body, $device, $rawLog);
         }
 
-        Log::channel('stack')->info("[ADMS] {$table} from {$sn}: {$count} record(s), stamp now {$device->last_stamp}");
+        $newStamp = (int) ($device->last_stamp ?? 0);
+
+        // ── Stuck-resend recovery ─────────────────────────────────────────────
+        // If the batch contained only records at/below the cursor we already had
+        // (newStamp did not advance), the device is stuck re-uploading confirmed
+        // records because it never re-handshakes to read its cursor. Push the
+        // OPTION block (which carries ATTLOGStamp={$newStamp}) back through the
+        // cdata channel it IS using, so it re-reads the cursor and stops. Only for
+        // ATTLOG and only when there were records to confirm.
+        if ($table === 'ATTLOG' && $count > 0 && $newStamp > 0 && $newStamp <= $priorStamp) {
+            Log::channel('stack')->info("[ADMS] {$sn} resending confirmed records (stamp={$newStamp}); pushing OPTION block to advance cursor");
+            return response($this->buildOptionsBody($sn, $newStamp), 200, ['Content-Type' => 'text/plain']);
+        }
+
+        Log::channel('stack')->info("[ADMS] {$table} from {$sn}: {$count} record(s), stamp now {$newStamp}");
 
         // ZKTeco ADMS expects the reply to be the COUNT of records accepted in this
         // batch — NOT a cumulative number. Returning a wrong/growing value makes the
